@@ -468,6 +468,39 @@ P0 修复、P1 修复、上架物料（隐私政策 URL、权限理由、截图�
 - **未实测**：真实点击扩展图标的手感（自动化只能走 `MYCLIP_START_ACTIVE` 等价路径）、快捷键在用户键盘布局上的实际触发、
   Chrome 快捷键设置页里改键后的行为。
 
+## 八g、数据使用声明口径更正（2026-11-23，上架前自查）
+
+**上一轮我给的「四项全选『不收集』」是错的，这里更正。**
+
+依据 Chrome 官方《[User Data FAQ](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq)》：
+
+- 第 2 问把「**Clipping or scraping content from a website that the user visits, such as taking screenshots or capturing data from a web page**」
+  直接列为「处理用户数据」的例子 —— 本扩展正是干这个的；
+- 第 3 问：**「Yes. Extensions are required to disclose how they handle user data, even when data is processed or stored locally
+  on a user's device and is not transmitted to external servers or third parties.」**
+  → 「只在本机处理」**也要如实披露**，不披露按「披露与实际行为不一致」处理（官方明确：可导致下架、停用用户群、封禁开发者）。
+
+**正确勾法**（第一组 9 项）：
+
+| 披露项 | 勾 | 本扩展的事实 |
+| --- | --- | --- |
+| 网站内容 | ✅ | 剪藏时读取当前页可见文字与图片；截图剪藏截取可视区域；本机转 Markdown 写进你的妙言库 |
+| 网络记录 / 浏览活动 | ✅ | 记录被剪藏页面的网址与剪藏时间（写进 frontmatter）；会话内留一个「最近活动标签页网址」用于提示草稿是否当前页；不留浏览历史、不上传 |
+| 用户活动 | ✅ | 保存你在侧边栏输入的标题与标签（写进笔记）、剪藏过的标签页 ✓ 角标（仅会话内）；不记录网页上的点击/滚动/击键 |
+| 个人身份信息 / 健康信息 / 财务和付款 / 身份验证信息 / 个人通讯 / 位置 | ❌ | 不涉及；不读密码框、隐藏元素、Cookie、表单值 |
+
+**第二组「有限使用认证」全部勾上**（不出售、不向第三方传输、不用于单一用途之外、符合隐私实践政策等）。
+
+**一致性要求**（官方 FAQ 末条：后台披露、隐私政策、扩展行为三者不一致即违规）→ 已同步改写：
+
+- `output/miaoyan-clipper/PRIVACY.md` 与 `store/privacy.html`：新增「一、数据使用披露」表格，
+  结论句改为「只在你自己的电脑上处理三类数据（网站内容、浏览活动、用户输入的标题与标签），不上传、不共享、不出售」；
+- `store/submit-checklist.md` §3.5 重写为 9 项逐项勾法 + 认证组清单；`store/listing.md` 与本 README 的旧措辞同步修正；
+- `test/audit/SUMMARY.md` 的「不收集、不外发」结论加更正注（那是「不外发」的事实结论，不是商店表单的勾法）。
+
+已重新打包 `output/miaoyan-clipper-0.5.0-store.zip`（含新 `PRIVACY.md`，32 文件）、更新 GitHub Release v0.5.0 附件，
+并把新隐私政策推上线：<https://gu70619052.github.io/miaoyan-clipper/>（已验证 HTTP 200 且含「数据使用披露」章节）。
+
 ## 九、v0.2.1 修复记录（诊断报告定位出的真正根因）
 
 **v0.2.0 的根因判断有错，这里更正。** v0.2.0 推测是「后台 Service Worker 与扩展页上下文对 iCloud 目录表现不一致」，
