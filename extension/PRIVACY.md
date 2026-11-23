@@ -61,6 +61,15 @@
 剪藏结果以 Markdown 文件形式保存在**你授权的目录**里（笔记 `.md` 文件 + `i/` 附件目录）。
 想全部删除，直接在妙言 App 或文件管理器里删除这些文件即可。扩展本身不保存任何副本；撤销授权（设置页「清除授权」）会同时清掉扩展里缓存的目录列表；关闭浏览器即清空会话里的草稿与标签页角标。
 
-## 七、变更与联系
+## 七、商标、致谢与许可
+
+- **本扩展是第三方开发者独立开发的非官方插件**，与妙言（MiaoYan）App 及其作者 tw93 无隶属、授权或合作关系。
+  「妙言」一词仅用于指明本扩展能把内容存进哪个应用，属于指示性使用；妙言的商标与著作权归其所有者所有。
+- **扩展图标**取自妙言 App（tw93/MiaoYan，MIT License，Copyright (c) 2022 Tw93），仅用于表明兼容关系。
+- 本扩展**未使用妙言的源代码**，只按其公开的 Markdown 文件格式与 `i/` 附件目录约定写入文件。
+- 本扩展使用数据的方式符合 Chrome 应用商店用户数据政策，包括有限使用（Limited Use）要求：
+  > The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements.
+
+## 八、变更与联系
 
 本政策随扩展版本更新，重大变更会在扩展更新说明里注明。有问题可以在扩展的 GitHub 仓库提 issue。

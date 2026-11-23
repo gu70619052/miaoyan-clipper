@@ -222,6 +222,14 @@ node shots.mjs    # 重新生成界面截图
 
 
 
+## 致谢与许可
+
+- **本扩展是第三方开发者独立开发的非官方插件**，与妙言（MiaoYan）App 及其作者 tw93 无隶属、授权或合作关系。
+  「妙言」一词仅用于指明本扩展能把内容存进哪个应用；妙言的商标与著作权归其所有者所有。
+- 扩展图标取自妙言 App（`tw93/MiaoYan`，**MIT License, Copyright (c) 2022 Tw93**），仅用于表明兼容关系。
+- 本扩展未使用妙言的源代码，只按其公开的 Markdown 文件格式与 `i/` 附件目录约定写入文件。
+- 渲染预览用的 `src/vendor/marked.min.js` 为 marked@12.0.2（MIT，见 `src/vendor/marked.LICENSE.md`）。
+
 ## 已知限制
 
 - 目录授权必须手动点一次（原生目录选择器无法自动化）

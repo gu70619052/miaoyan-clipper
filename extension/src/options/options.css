@@ -222,3 +222,5 @@ code {
 }
 
 .btn.ghost { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+
+.legal { margin: 18px 0 0; line-height: 1.7; border-top: 1px solid var(--line); padding-top: 12px; }

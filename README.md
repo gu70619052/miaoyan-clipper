@@ -501,6 +501,42 @@ P0 修复、P1 修复、上架物料（隐私政策 URL、权限理由、截图�
 已重新打包 `output/miaoyan-clipper-0.5.0-store.zip`（含新 `PRIVACY.md`，32 文件）、更新 GitHub Release v0.5.0 附件，
 并把新隐私政策推上线：<https://gu70619052.github.io/miaoyan-clipper/>（已验证 HTTP 200 且含「数据使用披露」章节）。
 
+## 八h、商标与版权：结论是要声明，声明放哪、怎么写（2026-11-23）
+
+用户问：「这个插件只是基于妙言 App 开发的，与 App 本身无关，要不要在简介里声明？」——**要声明**。
+
+**依据**
+
+| 来源 | 原文要点 |
+| --- | --- |
+| 商店《Impersonation & Intellectual Property》第 1 条 | 「Don't pretend to be someone else, and don't represent that your product is authorized by, endorsed by, or produced by another company or organization, if that is not the case.」 |
+| 同政策第 5 条 | 不得侵犯他人专利、商标、商业秘密、著作权等权利 |
+| `tw93/MiaoYan` 的 LICENSE | **MIT License, Copyright (c) 2022 Tw93** —— 允许再分发，但**要求保留版权与许可声明** |
+
+**评估结论**
+
+1. 名称里的「妙言」属于**指示性合理使用**（用他人商标指明兼容对象），本身不侵权；
+   风险点不是「用了名字」，而是**是否让人以为有授权/背书**。
+2. 扩展图标取自妙言 App：法律上可用（MIT 允许再分发），但必须**保留版权与许可声明** →
+   已在简介、审核备注、隐私政策、扩展设置页四处写明图标来源与 MIT 许可。
+3. 未使用妙言任何源代码，只使用其公开的**文件格式约定**（Markdown + frontmatter + `i/` 附件目录），
+   格式与方法不受著作权保护。
+4. **绝对不能出现的措辞**：「妙言官方插件」「由妙言团队开发」「官方出品」「受妙言官方推荐」「妙言授权」。
+
+**已落地**
+
+- `manifest.json`：新增 `author: gu70619052`、`homepage_url: https://github.com/gu70619052/miaoyan-clipper`
+  （后者同时满足商店「有限使用声明须挂在扩展自有网站」的要求），`description` 末尾加「（第三方开发的非官方插件）」。
+- `store/listing.md`：名称/简短说明/详细说明首句都加了非官方声明；新增「4b. 关于商标与版权」评估表；详细说明末尾加「致谢与许可」。
+- `store/submit-checklist.md`：§3.2 简短说明改写；§3.4.4 审核备注加中文非官方声明 + 图标来源 + **英文版声明**（全球审核员先看英文）。
+- `PRIVACY.md` 与 `store/privacy.html`：新增「七、商标、致谢与许可」，并附商店要求的有限使用肯定式声明原句
+  （*The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements.*）。
+- 扩展内：`src/options/options.html` 底部加一行非官方声明 + `src/options/options.css` 加 `.legal` 样式；扩展 `README.md` 加「致谢与许可」。
+- 回归：改动后 e2e **87/87 全绿**；商店 zip 重打包；GitHub 仓库与 Pages 同步更新。
+
+**保守备选**：如果不想在名字里带「妙言」，可把应用名称改成 `妙言剪藏（非官方）· 网页存笔记`（≤45 字符），
+代价是搜索命中率下降；本轮默认保留「妙言剪藏」+ 简介声明。
+
 ## 九、v0.2.1 修复记录（诊断报告定位出的真正根因）
 
 **v0.2.0 的根因判断有错，这里更正。** v0.2.0 推测是「后台 Service Worker 与扩展页上下文对 iCloud 目录表现不一致」，
