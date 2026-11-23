@@ -6,6 +6,7 @@
 import { getRootHandle, queryPermissionState, requestPermissionNow } from './fsdb.js';
 import { getSettings, setSettings } from './settings.js';
 import { cacheFolderTree } from './foldercache.js';
+import { hasOriginPermission, originPattern } from './permissions.js';
 import {
   sanitizeFileName,
   listDirNames,
@@ -289,6 +290,9 @@ async function writeOnce(draft, settings, root, opts) {
   let body = String(draft.markdown || '');
   let attachmentDir;
   let existingAttachments;
+  // 图片没下载到本地（用户没给来源站点授权 / 网络失败）时统计一下，交给界面提示
+  let remoteImages = 0;
+  const permissionOrigins = new Set();
   try {
     attachmentDir = await dir.getDirectoryHandle('i', { create: true });
     existingAttachments = new Set(await listDirNames(attachmentDir));
@@ -329,8 +333,10 @@ async function writeOnce(draft, settings, root, opts) {
       const img = draft.images[i];
       if (!img || !img.src) continue;
       if (!referenced.has(i)) continue; // 正文里没引用这张图，不用下载
-      if (settings.imagePolicy === 'remote') {
+      if (settings.imagePolicy === 'remote' || opts.forceRemoteImages) {
+        // 用户没给图片来源站点授权（或设置里选了只存链接）→ 保留原始链接
         repl.set(i, { kind: 'link', value: img.src });
+        remoteImages += 1;
         continue;
       }
       try {
@@ -344,8 +350,14 @@ async function writeOnce(draft, settings, root, opts) {
         existingAttachments.add(name);
         repl.set(i, { kind: 'link', value: `/i/${name}` });
       } catch (err) {
+        // 跨站图片下不下来，多半是没拿到那个站点的访问权（v0.6.0 起不再有全站权限）
+        if (!(await hasOriginPermission(img.src))) {
+          const pattern = originPattern(img.src);
+          if (pattern) permissionOrigins.add(pattern);
+        }
         if (settings.keepRemoteImageOnFail) {
           repl.set(i, { kind: 'link', value: img.src });
+          remoteImages += 1;
         } else {
           // 下载失败时把**整张图片语法**换成一行说明文字；
           // 只换 URL 会产出 ![坏图](_坏图（下载失败）_) 这种畸形 Markdown（审计 P1-8）。
@@ -441,5 +453,7 @@ async function writeOnce(draft, settings, root, opts) {
     folder: folderPath,
     path: folderPath ? `${folderPath}/${writeRes.fileName}` : writeRes.fileName,
     bytes: content.length,
+    remoteImages: typeof remoteImages === 'number' ? remoteImages : 0,
+    imagePermissionNeeded: Array.from(permissionOrigins || []),
   };
 }

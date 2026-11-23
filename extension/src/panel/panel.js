@@ -18,6 +18,12 @@ import {
 import { listFolders, saveDraft } from '../lib/writer.js';
 import { cacheFolderTree } from '../lib/foldercache.js';
 import { getSettings } from '../lib/settings.js';
+import {
+  originPattern,
+  hasOriginPermission,
+  requestOriginPermissions,
+  pendingImageOrigins,
+} from '../lib/permissions.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -389,6 +395,9 @@ async function markStale(draft) {
 /**
  * 在当前标签页发起剪藏（等价于点地址栏旁的扩展图标）。
  * 先清掉上一篇草稿，免得面板还显示旧内容。
+ *
+ * v0.6.0：扩展不再有全站主机权限，从侧栏按钮发起时拿不到 activeTab，
+ * 所以这里要先向 Chrome 申请「只这一个站点」的访问权（用户手势里会弹一次确认）。
  */
 async function clipActiveTab(mode = 'article') {
   setStatus('正在发起剪藏…', 'info');
@@ -397,7 +406,35 @@ async function clipActiveTab(mode = 'article') {
   el.draftCard.hidden = true;
   el.staleNote.hidden = true;
   el.emptyCard.hidden = false;
-  const res = await sendMessage({ type: 'MYCLIP_START_ACTIVE', mode });
+
+  // 找到当前标签页（manifest 里有 tabs 权限，能读到地址）
+  let tab = null;
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    tab = tabs && tabs[0];
+  } catch (err) {
+    tab = null;
+  }
+  if (!tab || tab.id == null) {
+    setStatus('发起剪藏失败：找不到当前标签页', 'err');
+    return false;
+  }
+  const url = tab.url || '';
+  if (!/^https?:\/\//i.test(url)) {
+    setStatus('当前页面不支持剪藏（file:// / chrome:// / 应用商店页面）', 'err');
+    return false;
+  }
+
+  // 需要这个站点的访问权才能把内容脚本注进去
+  if (originPattern(url) && !(await hasOriginPermission(url))) {
+    const ask = await requestOriginPermissions([url]);
+    if (!ask.granted) {
+      setStatus('未获得该站点的访问权限，无法剪藏。可以改用地址栏旁的扩展图标或右键菜单发起', 'err');
+      return false;
+    }
+  }
+
+  const res = await sendMessage({ type: 'MYCLIP_START_ACTIVE', mode, tabId: tab.id });
   if (!res || !res.ok) {
     setStatus(`发起剪藏失败：${(res && res.error) || '未知错误'}`, 'err');
     return false;
@@ -500,9 +537,26 @@ async function save() {
   };
   $('btn-save').disabled = true;
   setSaveStatus('正在保存…', 'info');
+
+  // 图片要存到本地，就得能访问图片所在的网站。
+  // 跨站图片（CDN 之类）需要单独授权一次 —— 在用户手势里问，不授权就退回原始链接。
+  let forceRemoteImages = false;
+  try {
+    const settings = await getSettings();
+    if (settings.imagePolicy !== 'remote') {
+      const need = await pendingImageOrigins(payload.draft);
+      if (need.length) {
+        const ask = await requestOriginPermissions(need);
+        if (!ask.granted) forceRemoteImages = true;
+      }
+    }
+  } catch (err) {
+    /* 拿不到权限信息就按原样尝试 */
+  }
+
   let res = null;
   try {
-    res = await writeDraft(payload);
+    res = await writeDraft(payload, { forceRemoteImages });
   } catch (err) {
     res = { ok: false, error: String(err && err.message) };
   }
@@ -524,8 +578,11 @@ async function save() {
     return;
   }
   const where = res.folder ? `${res.folder}/${res.fileName}` : res.fileName;
-  setSaveStatus(`已保存：${where}`, 'ok');
-  setStatus(`已保存：${where}`, 'ok');
+  const remoteNote = res.remoteImages
+    ? `（${res.remoteImages} 张图片没下载到本地，已保留原始链接）`
+    : '';
+  setSaveStatus(`已保存：${where}${remoteNote}`, 'ok');
+  setStatus(`已保存：${where}${remoteNote}`, 'ok');
   await sendMessage({ type: 'CLEAR_DRAFT' });
   currentDraft = null;
   el.draftCard.hidden = true;
@@ -553,10 +610,16 @@ async function writeDraft(payload, opts = {}) {
         tags: payload.tags,
         root: handle,
         requestPermission: true,
+        forceRemoteImages: !!opts.forceRemoteImages,
       });
       if (res && res.ok) return res;
       if (!allowFallback) return res || { ok: false, error: '保存失败' };
-      const fallback = await sendMessage({ type: 'MYCLIP_SAVE', ...payload, from: 'panel' });
+      const fallback = await sendMessage({
+        type: 'MYCLIP_SAVE',
+        ...payload,
+        from: 'panel',
+        forceRemoteImages: !!opts.forceRemoteImages,
+      });
       if (fallback && fallback.ok) return fallback;
       return res || fallback || { ok: false, error: '保存失败' };
     } catch (err) {
@@ -564,7 +627,12 @@ async function writeDraft(payload, opts = {}) {
     }
   }
   if (!allowFallback) return { ok: false, error: '尚未授权妙言库目录' };
-  return sendMessage({ type: 'MYCLIP_SAVE', ...payload, from: 'panel' });
+  return sendMessage({
+    type: 'MYCLIP_SAVE',
+    ...payload,
+    from: 'panel',
+    forceRemoteImages: !!opts.forceRemoteImages,
+  });
 }
 
 /**
@@ -626,6 +694,7 @@ async function handlePendingSave(req) {
         fileName: (res && res.fileName) || '',
         folder: (res && res.folder) || '',
         path: (res && res.path) || '',
+        remoteImages: (res && res.remoteImages) || 0,
         at: Date.now(),
       },
     });
@@ -634,8 +703,9 @@ async function handlePendingSave(req) {
   }
   if (res && res.ok) {
     const where = res.folder ? `${res.folder}/${res.fileName}` : res.fileName;
-    setSaveStatus(`已保存：${where}`, 'ok');
-    setStatus(`已保存：${where}`, 'ok');
+    const imgNote = res.remoteImages ? `（${res.remoteImages} 张图片未下载到本地）` : '';
+    setSaveStatus(`已保存：${where}${imgNote}`, 'ok');
+    setStatus(`已保存：${where}${imgNote}`, 'ok');
     await sendMessage({ type: 'CLEAR_DRAFT' });
   } else {
     setSaveStatus(`保存失败：${(res && res.error) || '未知错误'}`, 'err');

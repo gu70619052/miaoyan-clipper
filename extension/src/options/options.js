@@ -12,6 +12,7 @@ import {
 import { getSettings, setSettings } from '../lib/settings.js';
 import { listFolders } from '../lib/writer.js';
 import { readFolderTree, cacheFolderTree, clearFolderTree } from '../lib/foldercache.js';
+import { getGrantedOrigins, removeOriginPermissions } from '../lib/permissions.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -252,6 +253,33 @@ async function runDiag() {
     `设置页读到 ${page.folders || 0} 个子目录，后台读到 ${(bgReport && bgReport.folders) || 0} 个`;
 }
 
+/** 列出当前保留的可选主机权限（只为下载跨站图片而授予的那些站点） */
+async function loadOrigins() {
+  const list = $('origin-list');
+  const summary = $('origin-summary');
+  if (!list || !summary) return;
+  let origins = [];
+  try {
+    origins = await getGrantedOrigins();
+  } catch (err) {
+    origins = [];
+  }
+  list.innerHTML = '';
+  if (!origins.length) {
+    summary.textContent = '目前没有保留任何站点授权';
+    const li = document.createElement('li');
+    li.textContent = '没有常驻访问的网站：剪藏时 Chrome 只临时给当前站点权限。';
+    list.appendChild(li);
+    return;
+  }
+  summary.textContent = `已保留 ${origins.length} 个站点的访问权`;
+  origins.forEach((o) => {
+    const li = document.createElement('li');
+    li.textContent = o;
+    list.appendChild(li);
+  });
+}
+
 function bind() {
   $('btn-pick').addEventListener('click', pickRoot);
   $('btn-regrant').addEventListener('click', regrant);
@@ -261,6 +289,21 @@ function bind() {
     await loadFolders();
     toast('目录列表已刷新');
   });
+  const btnRefreshOrigins = $('btn-refresh-origins');
+  if (btnRefreshOrigins) {
+    btnRefreshOrigins.addEventListener('click', async () => {
+      await loadOrigins();
+      toast('站点授权列表已刷新');
+    });
+  }
+  const btnRevoke = $('btn-revoke-origins');
+  if (btnRevoke) {
+    btnRevoke.addEventListener('click', async () => {
+      const ok = await removeOriginPermissions();
+      await loadOrigins();
+      toast(ok ? '已撤销全部站点授权' : '撤销失败');
+    });
+  }
 
   $('input-default').addEventListener('change', (ev) => {
     persist({ defaultFolder: ev.target.value.trim() });
@@ -303,4 +346,7 @@ function bind() {
   bind();
   await refreshRoot();
   await loadSettings();
+  await loadOrigins();
+  // 目录列表稍后刷新（枚举 iCloud 目录可能要一两秒，别让整页等它）
+  loadFolders().catch(() => {});
 })();

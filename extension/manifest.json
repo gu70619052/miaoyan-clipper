@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "妙言剪藏",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "浏览网页时框选、选段、整篇或截图剪藏，转成妙言 Markdown，直接存进本地妙言笔记库。（第三方开发的非官方插件）",
   "minimum_chrome_version": "116",
   "icons": {
@@ -55,28 +55,15 @@
   },
   "permissions": [
     "activeTab",
+    "scripting",
+    "tabs",
     "storage",
     "contextMenus",
     "sidePanel"
   ],
-  "host_permissions": [
+  "optional_host_permissions": [
     "http://*/*",
     "https://*/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "js": [
-        "src/content/extractor.js",
-        "src/content/converter.js",
-        "src/content/content.js"
-      ],
-      "run_at": "document_idle",
-      "all_frames": false
-    }
   ],
   "author": "gu70619052",
   "homepage_url": "https://github.com/gu70619052/miaoyan-clipper"

@@ -9,13 +9,13 @@
 | 项目 | 状态 |
 | --- | --- |
 | 扩展源码（可加载） | `output/miaoyan-clipper/` ✅ |
-| 端到端测试 | `output/miaoyan-clipper/test/e2e.mjs`，**87/87 断言通过** ✅ |
+| 端到端测试 | `output/miaoyan-clipper/test/e2e.mjs`，**90/90 断言通过** ✅ |
 | 完整审计（7 个子 agent） | `output/miaoyan-clipper/test/audit/`：186 条用例矩阵 + 4 份专项报告 + 独立复核，**汇总见 `audit/SUMMARY.md`** ✅ |
 | 界面截图 | `output/miaoyan-clipper/test/screenshots/`（7 张，含 `06-全文范围框.png`、`07-无语义类名-默认框.png`）✅ |
 | 真实妙言库写入 | ⚠️ 需你手动授权一次目录（自动化测试用 OPFS 根句柄替代，代码路径完全相同） |
-| Chrome 应用商店上架 | 🟡 **只差你在商店后台点几下**：素材与文案已备好（`output/miaoyan-clipper/store/`）；隐私政策已托管上线并验证可访问 → <https://gu70619052.github.io/miaoyan-clipper/>；扩展源码与上架包已公开到 GitHub <https://github.com/gu70619052/miaoyan-clipper>（Release v0.5.0 附上架 zip）；**待你做**：付 5 美元开发者注册费 → 建商品 → 照抄 `store/submit-checklist.md` 里的文案 → 提交审核 |
+| Chrome 应用商店上架 | 🟡 **只差你在商店后台点几下**：素材与文案已备好（`output/miaoyan-clipper/store/`）；隐私政策已托管上线并验证可访问 → <https://gu70619052.github.io/miaoyan-clipper/>；扩展源码与上架包已公开到 GitHub <https://github.com/gu70619052/miaoyan-clipper>（Release v0.6.0 附上架 zip）；**待你做**：付 5 美元开发者注册费 → 建商品 → 照抄 `store/submit-checklist.md` 里的文案 → 提交审核 |
 | GitHub 仓库（源码 + 隐私政策托管） | ✅ <https://github.com/gu70619052/miaoyan-clipper>（公开仓库，29 个文件，Pages 已 built） |
-| 版本 | v0.5.0（交互优化：点图标即剪藏 + 快捷键 + 保存后提示条 + 标签记忆） |
+| 版本 | v0.6.0（权限最小化：安装不申请主机权限，按需注入 + 跨站图片按站点授权） |
 
 ---
 
@@ -45,7 +45,7 @@
 | --- | --- |
 | 源码仓库（公开） | <https://github.com/gu70619052/miaoyan-clipper> |
 | 隐私政策（商店填这个） | <https://gu70619052.github.io/miaoyan-clipper/> |
-| 上架包下载（Release） | <https://github.com/gu70619052/miaoyan-clipper/releases/tag/v0.5.0> |
+| 上架包下载（Release） | <https://github.com/gu70619052/miaoyan-clipper/releases/tag/v0.6.0> |
 
 ---
 
@@ -151,7 +151,7 @@ npm install          # 只装 puppeteer-core
 node e2e.mjs         # 或 npm test
 ```
 
-脚本用**本机真实 Chrome** 加载未打包扩展（CDP `Extensions.loadUnpacked`），跑 87 项断言：
+脚本用**本机真实 Chrome** 加载未打包扩展（CDP `Extensions.loadUnpacked`），跑 90 项断言：
 
 | 组 | 内容 | 结果 |
 | --- | --- | --- |
@@ -170,6 +170,7 @@ node e2e.mjs         # 或 npm test
 | M | v0.4.0 来源地址脱敏（token/签名替换为 `***`，普通参数保留） | 2/2 |
 | N | v0.4.0 截图剪藏端到端（无授权时给可读提示、截屏→框选→JPEG 草稿、截图附件写入 `i/`） | 3/3 |
 | O | v0.5.0 交互优化（三个快捷键已注册、点图标发起剪藏出范围框、面板「剪藏当前页面」按钮、保存后浮层自动关闭、提示条带「继续剪藏」、✓ 角标、标签记忆与预填、上一篇文章提示条） | 9/9 |
+| P | v0.6.0 权限最小化（正式包无 `host_permissions`/`content_scripts`、权限工具函数 pattern 归一与同源免申请、设置页权限卡片可撤销） | 3/3 |
 
 实测产出示例（`title` 键已与既有迁移笔记对齐）：
 
@@ -576,6 +577,47 @@ P0 修复、P1 修复、上架物料（隐私政策 URL、权限理由、截图�
 | 授权后网页浮层的目标目录只有「（库根目录）」 | 浮层通过后台 Service Worker 枚举 iCloud 目录，后台上下文枚举不到子目录 | 目录枚举改到扩展页上下文 + 目录树缓存（`folderTree`）供浮层直读；浮层读不到时如实报错而不是假装只有库根 |
 | 面板里能选子目录，保存却报「授权已过期」 | 落盘跑在后台上下文，iCloud 句柄权限/可用性不一致 | 写盘改到扩展页上下文（点击保存即用户手势，可重新授权）；后台失败时转交侧栏代存，浮层自动轮询结果 |
 | 扩展图标与 UI 风格和妙言 app 不一致 | 自绘橙红图标 + 蓝强调色 | 图标改为妙言 app 图标（`app.icns` → 16/32/48/128）；面板/设置页/浮层统一妙言配色（青绿 `#4DBF9E` 强调色 + 暖色深浅两套），并修好 logo 图片路径 |
+
+## 八i、v0.6.0 权限最小化：安装不申请任何网站访问权
+
+**你的判断**（m02674）：「声明主机权限会减慢审核速度，我建议是先按需注入权限」。按此执行。
+
+### 8i.1 改了什么
+
+| 项 | v0.5.0 及以前 | v0.6.0 |
+| --- | --- | --- |
+| `host_permissions` | `http://*/*`、`https://*/*`（装完就能读所有网站） | **删掉**；只在 `optional_host_permissions` 里声明，用户用到才给 |
+| `content_scripts` | 静态注入到所有 http/https 页面 | **删掉**；用户手势 → `activeTab` → `chrome.scripting.executeScript` 按需注入 |
+| 新增权限 | — | `scripting`（注入用）、`tabs`（读当前页标题/网址，判断能否剪藏与写来源） |
+| 图片下载 | 直接 fetch（有全站权限） | 跨站图片按站点申请可选权限；拒绝则保留原始链接，笔记照常保存 |
+| 设置页 | 无权限视图 | 新增「网站访问权限」卡片：列出保留的站点、一键全部撤销 |
+
+### 8i.2 实现要点
+
+- `src/lib/permissions.js`（新）：`originPattern(url)`、`getGrantedOrigins()`、`hasOriginPermission(url)`、
+  `requestOriginPermissions(urls)`（必须在用户手势里）、`removeOriginPermissions()`、
+  `pendingImageOrigins(draft)`（同源图片免申请 —— activeTab 已覆盖，只有跨站 CDN 图才算缺权）。
+- `service-worker.js`：`ensureContent(tabId)` 注入三个脚本；`startClipOnTab()` 改成 async 并返回 `{ok,error}`，
+  注入失败（无权限/不可访问页）→ 角标 `!` + 打开侧栏提示；`MYCLIP_START_ACTIVE` 支持带 `tabId`。
+- `panel.js`：`clipActiveTab()` 先查站点权限，缺则在点击手势里申请；`save()` 保存前按需申请图片站点权限，
+  被拒则以 `forceRemoteImages: true` 继续保存。
+- `writer.js`：`writeOnce()` 支持 `opts.forceRemoteImages`；失败时判断是不是缺站点权限并回报
+  `remoteImages` / `imagePermissionNeeded`，界面据此提示「N 张图片未下载到本地」。
+- 内容脚本 `content.js` 顶部本来就有 `window.__miaoyanClipLoaded` 幂等守卫，按需注入重复执行不会重复注册监听器。
+
+### 8i.3 测试怎么跑（重要）
+
+自动化**模拟不出「点扩展图标」这个用户手势**，所以 `test/e2e.mjs` 里 `cloneExtension()` 会把扩展复制到临时目录、
+给副本补上 `host_permissions` + `content_scripts`（仅本机测试端口），用来触发剪藏。
+正式包的最小权限由 **P1 断言**守护：读 `manifest.json` 断言它既没有 `host_permissions`、也没有 `content_scripts`，
+并且 `activeTab`/`scripting` 在 `permissions` 里、`optional_host_permissions` 恰好两项。
+
+### 8i.4 验证
+
+- 端到端测试 **90/90 全绿**（A2/B14/C11/D7/E3/F3/G6/H9/I5/J3/K6/L4/M2/N3/O9 之外，新增 P 组 3 项：
+  P1 正式包权限最小、P2 权限工具函数（pattern 归一 / 同源免申请 / 跨站算缺权）、P3 设置页权限卡片可撤销）。
+- **未实测**：真实点图标的 activeTab 授权链路（只能人工验）、用户在权限弹窗点「允许/拒绝」两种走向的真实 UI 反馈
+  （自动化里 `chrome.permissions.request` 无弹出时会挂住，已在探针里确认）。
 
 ---
 

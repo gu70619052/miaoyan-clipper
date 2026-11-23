@@ -1113,10 +1113,14 @@
       setStatus(`保存失败：${(res && res.error) || '未知错误'}`, 'err');
       return;
     }
-    setStatus(`已保存到 ${res.folder ? res.folder + '/' : ''}${res.fileName}`, 'ok');
+    const where = `${res.folder ? res.folder + '/' : ''}${res.fileName}`;
+    const imgNote = res.remoteImages
+      ? `（${res.remoteImages} 张图片未下载到本地，已保留原始链接）`
+      : '';
+    setStatus(`已保存到 ${where}${imgNote}`, 'ok');
     // 保存成功后浮层自动关闭，只留一条会消失的提示（用户点 1：关掉卡片后还能继续剪）
     hideAll();
-    showToast(`已保存到 ${res.folder ? res.folder + '/' : ''}${res.fileName}`, {
+    showToast(`已保存到 ${where}${imgNote}`, {
       action: () => startArticleAdjust(),
       actionLabel: '继续剪藏',
     });
@@ -1127,9 +1131,12 @@
     const final = await waitSaveResult(startedAt, timeoutMs);
     if (final && final.ok) {
       const where = `${final.folder ? final.folder + '/' : ''}${final.fileName}`;
-      setStatus(`已保存到 ${where}`, 'ok');
+      const imgNote = final.remoteImages
+        ? `（${final.remoteImages} 张图片未下载到本地，已保留原始链接）`
+        : '';
+      setStatus(`已保存到 ${where}${imgNote}`, 'ok');
       hideAll();
-      showToast(`已保存到 ${where}`, { action: () => startArticleAdjust(), actionLabel: '继续剪藏' });
+      showToast(`已保存到 ${where}${imgNote}`, { action: () => startArticleAdjust(), actionLabel: '继续剪藏' });
       return;
     }
     setStatus(`保存失败：${(final && final.error) || '侧栏没有返回结果'}`, 'err');

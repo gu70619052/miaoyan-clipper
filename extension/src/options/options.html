@@ -108,6 +108,26 @@
       </section>
 
       <section class="card">
+        <h2>网站访问权限</h2>
+        <p class="muted">
+          从 v0.6.0 起，本扩展<b>不再常驻访问所有网站</b>：
+          你点扩展图标、右键菜单或按快捷键时，Chrome 只把当前这一个站点临时交给我们；
+          别的网站我们一概看不到。
+        </p>
+        <p class="muted tiny">
+          只有一种情况会长期保留某个站点的访问权：正文里的图片在别的网站（CDN 之类）上，
+          想把它们也下载到本地时，会按站点单独问你一次。不授权也没关系，图片会保留原始链接。
+        </p>
+        <div class="path-row">
+          <span id="origin-summary" class="path">读取中…</span>
+          <span class="grow"></span>
+          <button id="btn-refresh-origins" class="btn ghost">刷新</button>
+          <button id="btn-revoke-origins" class="btn ghost danger">撤销全部站点授权</button>
+        </div>
+        <ul id="origin-list" class="guide tiny"></ul>
+      </section>
+
+      <section class="card">
         <h2>目录与权限诊断</h2>
         <p class="muted">
           iCloud Drive 目录在不同浏览器上下文里的表现可能不一致。点下面的按钮，

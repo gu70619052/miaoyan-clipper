@@ -7,6 +7,18 @@ import { listFolders, saveDraft } from '../lib/writer.js';
 import { getSettings } from '../lib/settings.js';
 import { getRootHandle, ensurePermission } from '../lib/fsdb.js';
 import { readFolderTree } from '../lib/foldercache.js';
+import { originPattern } from '../lib/permissions.js';
+
+/**
+ * v0.6.0 起不再静态注入内容脚本，改为「用到才注入」。
+ * 注入需要当前站点的访问权：点扩展图标 / 右键菜单 / 快捷键时 Chrome 会
+ * 临时授予 activeTab（够用）；从侧栏按钮发起时由面板先申请可选主机权限。
+ */
+const CONTENT_FILES = [
+  'src/content/extractor.js',
+  'src/content/converter.js',
+  'src/content/content.js',
+];
 
 const MENU_ITEMS = [
   { id: 'myclip-select', title: '妙言剪藏：框选剪藏', contexts: ['page'] },
@@ -77,35 +89,54 @@ function notifyUnsupportedPage(tabId, url) {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   const mode = MENU_MODE[info.menuItemId];
   if (!mode || !tab || tab.id == null) return;
-  startClipOnTab(tab, mode);
+  startClipOnTab(tab, mode).catch(() => {});
 });
 
+/** 把内容脚本注入到指定标签页（内容脚本内部有幂等守卫，重复注入不会重复绑定） */
+async function ensureContent(tabId) {
+  if (tabId == null) return { ok: false, error: '标签页不可用' };
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: CONTENT_FILES,
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
+
 /**
- * 在某个标签页上发起剪藏。
- * 打不开内容脚本的页面（file://、chrome://、应用商店…）给角标提示，并打开侧栏。
+ * 在某个标签页上发起剪藏：先按需注入内容脚本，再让它开始剪藏。
+ * 打不开的页面（file://、chrome://、应用商店…）给角标提示，并打开侧栏。
  */
-function startClipOnTab(tab, mode) {
-  if (!tab || tab.id == null) return false;
+async function startClipOnTab(tab, mode) {
+  if (!tab || tab.id == null) return { ok: false, error: '标签页不可用' };
   const url = tab.url || '';
   if (!/^https?:\/\//i.test(url)) {
     notifyUnsupportedPage(tab.id, url);
-    openPanel(tab.id);
-    return false;
+    await openPanel(tab.id);
+    return { ok: false, error: '当前页面不支持剪藏（file:// / chrome:// / 应用商店页面）' };
   }
-  chrome.tabs.sendMessage(tab.id, { type: 'MYCLIP_START', mode }, () => {
-    const err = chrome.runtime.lastError;
-    if (err) {
-      // 页面没加载内容脚本（file://、chrome://、应用商店页面等）→ 给个可见提示
-      notifyUnsupportedPage(tab.id, url);
-      openPanel(tab.id);
-    }
-  });
-  return true;
+  const injected = await ensureContent(tab.id);
+  if (!injected.ok) {
+    notifyUnsupportedPage(tab.id, url);
+    await openPanel(tab.id);
+    return { ok: false, error: `无法访问该页面：${injected.error}` };
+  }
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: 'MYCLIP_START', mode });
+    return { ok: true };
+  } catch (err) {
+    notifyUnsupportedPage(tab.id, url);
+    await openPanel(tab.id);
+    return { ok: false, error: String((err && err.message) || err) };
+  }
 }
 
 // 点地址栏旁的扩展图标 = 发起剪藏（默认整篇正文，页面上还能拖范围框调整）
 chrome.action.onClicked.addListener((tab) => {
-  startClipOnTab(tab, 'article');
+  startClipOnTab(tab, 'article').catch(() => {});
 });
 
 const MODE_BY_COMMAND = {
@@ -121,7 +152,7 @@ chrome.commands.onCommand.addListener((command) => {
     .query({ active: true, currentWindow: true })
     .then((tabs) => {
       const tab = tabs && tabs[0];
-      startClipOnTab(tab, mode);
+      startClipOnTab(tab, mode).catch(() => {});
     })
     .catch(() => {});
 });
@@ -274,7 +305,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     case 'MYCLIP_SAVE': {
-      saveDraft(msg.draft, { folder: msg.folder, title: msg.title, tags: msg.tags })
+      saveDraft(msg.draft, {
+        folder: msg.folder,
+        title: msg.title,
+        tags: msg.tags,
+        forceRemoteImages: !!msg.forceRemoteImages,
+      })
         .then(async (res) => {
           if (res && res.ok) {
             await markClippedTab(msg.draft);
@@ -306,19 +342,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     case 'MYCLIP_START_ACTIVE': {
-      // 面板里的「剪藏当前页面」：等价于用户点了地址栏旁的扩展图标
+      // 面板里的「剪藏当前页面」：等价于用户点了地址栏旁的扩展图标。
+      // 面板是扩展页手势，拿不到 activeTab，所以由面板先申请该站点的可选权限，
+      // 这里只负责按需注入内容脚本并发起。
       const mode = msg.mode || 'article';
-      chrome.tabs
-        .query({ active: true, currentWindow: true })
-        .then((tabs) => {
-          const tab = tabs && tabs[0];
-          if (!tab) {
-            sendResponse({ ok: false, error: '找不到当前标签页' });
-            return;
+      (async () => {
+        let tab = null;
+        if (msg.tabId != null) {
+          try {
+            tab = await chrome.tabs.get(msg.tabId);
+          } catch (err) {
+            tab = null;
           }
-          const ok = startClipOnTab(tab, mode);
-          sendResponse({ ok, error: ok ? '' : '当前页面不支持剪藏（file:// / chrome:// 等）' });
-        })
+        } else {
+          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+          tab = tabs && tabs[0];
+        }
+        if (!tab) return { ok: false, error: '找不到当前标签页' };
+        const res = await startClipOnTab(tab, mode);
+        return res;
+      })()
+        .then((res) => sendResponse(res))
         .catch((err) => sendResponse({ ok: false, error: String(err && err.message) }));
       return true;
     }
