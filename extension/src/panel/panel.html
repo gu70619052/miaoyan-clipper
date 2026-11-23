@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>妙言剪藏</title>
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="logo" src="../../icons/icon48.png" alt="" />
+      <span class="name">妙言剪藏</span>
+    </div>
+    <div class="top-actions">
+      <span id="root-chip" class="chip" title="当前妙言库目录">未授权</span>
+      <button id="btn-options" class="icon-btn" title="设置">⚙</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- 未授权 / 权限失效：选择或重新授权库目录 -->
+    <section id="auth-card" class="card auth" hidden>
+      <div class="auth-icon">📁</div>
+      <h2 id="auth-title">先授权妙言笔记库</h2>
+      <p class="muted" id="auth-desc">
+        妙言没有开放接口，本扩展通过 Chrome 的文件系统权限直接往你的妙言库目录里写 Markdown。
+        授权一次即可长期有效，笔记不会离开你的电脑。
+      </p>
+      <!-- 句柄还在、只是权限需要用户再确认一次时显示 -->
+      <button id="btn-regrant" class="btn primary block" hidden>重新授权此目录（推荐）</button>
+      <button id="btn-pick-root" class="btn primary block">选择妙言库目录</button>
+      <p id="auth-hint" class="muted tiny">默认位置：iCloud › 妙言 › Documents（也可以选任意目录）</p>
+    </section>
+
+    <!-- 空状态 -->
+    <section id="empty-card" class="card empty" hidden>
+      <h2>还没有剪藏内容</h2>
+      <button id="btn-clip-current" class="btn primary block">剪藏当前页面</button>
+      <ul class="guide">
+        <li><b>工具栏图标</b>：点地址栏旁的扩展图标 = 直接剪藏当前页（还能拖范围框调整）</li>
+        <li><b>快捷键</b>：⌘/Ctrl + Shift + S 剪藏整篇、+ Shift + K 框选、+ Shift + P 截图</li>
+        <li><b>右键菜单</b>：页面空白处右键 →「妙言剪藏：框选剪藏 / 整篇正文 / 截图剪藏」</li>
+        <li><b>选中文字</b>：划选一段文字 → 右键 →「妙言剪藏：剪藏选中文字」</li>
+      </ul>
+      <p class="muted tiny">剪藏完成后，内容会自动出现在这里，可以先改 Markdown 再保存。</p>
+    </section>
+
+    <!-- 草稿编辑 -->
+    <section id="draft-card" class="card draft" hidden>
+      <div class="draft-head">
+        <span class="badge" id="draft-kind">正文</span>
+        <span class="muted tiny" id="draft-source"></span>
+      </div>
+
+      <!-- 面板里的草稿不是当前页面的（上一篇）时提示 -->
+      <div id="stale-note" class="stale-note" hidden>
+        <span id="stale-text">这是上一次剪藏的内容</span>
+        <button id="btn-clip-current-2" class="btn ghost">剪藏当前页面</button>
+      </div>
+
+      <div class="field">
+        <label for="input-title">标题</label>
+        <input id="input-title" type="text" placeholder="笔记标题" />
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="edit">编辑</button>
+        <button class="tab" data-tab="preview">预览</button>
+        <span class="grow"></span>
+        <span class="muted tiny" id="draft-meta"></span>
+      </div>
+
+      <textarea id="input-markdown" spellcheck="false" placeholder="Markdown 内容"></textarea>
+      <div id="preview" class="preview" hidden></div>
+
+      <div class="field">
+        <label for="select-folder">目标目录</label>
+        <div class="row">
+          <select id="select-folder"></select>
+          <button id="btn-new-folder" class="btn ghost" title="新建一个分类目录">新建</button>
+        </div>
+        <div id="new-folder-row" class="row" hidden>
+          <input id="input-new-folder" type="text" placeholder="新目录名，如：技术笔记" />
+          <button id="btn-new-folder-ok" class="btn ghost">确定</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="input-tags">标签（逗号分隔）</label>
+        <input id="input-tags" type="text" placeholder="如：技术, 灵感" />
+      </div>
+
+      <div class="actions">
+        <button id="btn-save" class="btn primary">保存到妙言</button>
+        <button id="btn-discard" class="btn ghost">丢弃</button>
+      </div>
+      <div id="save-status" class="status" hidden></div>
+    </section>
+  </main>
+
+  <footer id="statusbar" class="statusbar"></footer>
+
+  <script src="../vendor/marked.min.js"></script>
+  <script type="module" src="panel.js"></script>
+</body>
+</html>

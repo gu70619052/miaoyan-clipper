@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>妙言剪藏 · 隐私政策</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; padding: 40px 20px 80px;
+    font: 16px/1.75 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: #f5f1e9; color: #23211d;
+  }
+  main { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 8px; }
+  h2 { font-size: 18px; margin: 32px 0 8px; color: #1f6f5c; }
+  .sub { color: #7b756b; font-size: 14px; margin-bottom: 28px; }
+  .box { background: #fffdf8; border: 1px solid #e6dfd1; border-radius: 14px; padding: 8px 26px 26px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }
+  th, td { border: 1px solid #e6dfd1; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f0ead d; background: #f0eadd; white-space: nowrap; }
+  code { background: #efe9dd; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  ul { padding-left: 22px; }
+  .ok { color: #1f6f5c; font-weight: 600; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1e1d1b; color: #e9e6e0; }
+    .box { background: #242320; border-color: #302f2d; }
+    h2 { color: #4dbf9e; }
+    th, td { border-color: #302f2d; }
+    th { background: #2c2b27; }
+    code { background: #2f2e2a; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>妙言剪藏 · 隐私政策</h1>
+  <p class="sub">最后更新：2026-11-23 · 适用于「妙言剪藏」Chrome 扩展（版本 0.5.0）</p>
+
+  <div class="box">
+    <h2>一句话结论</h2>
+    <p><span class="ok">本扩展不收集、不上传、不共享任何用户数据。</span>
+      所有剪藏内容只写进你自己电脑上、由你自己授权的妙言笔记库目录（普通本地文件夹或 iCloud Drive 等你自己的同步盘）。
+      扩展没有服务器、没有账号、没有统计代码。</p>
+
+    <h2>一、扩展会碰哪些东西</h2>
+    <ul>
+      <li><b>网页正文</b>：只有你在网页上主动触发剪藏（点击浮层、右键菜单或扩展图标）时，才会读取当前页面的可见内容，转成 Markdown。</li>
+      <li><b>网页图片</b>：剪藏正文里的图片时，扩展会把图片下载到你指定目录下的 <code>i/</code> 附件目录里，
+        正文里写成 <code>/i/文件名</code> 引用；图片原地址来自你正在看的那个网页。</li>
+      <li><b>截图</b>：只有你主动用「截图剪藏」时才会截取当前标签页的可视区域，截图同样只写入你的笔记目录。</li>
+      <li><b>你的妙言库目录</b>：第一次使用时，你会手动选择一个目录（通常是
+        <code>~/Library/Mobile Documents/iCloud~com~tw93~miaoyan/Documents</code>）。扩展只对这个目录有读写权限。</li>
+      <li><b>少量本地设置</b>：默认目标目录、是否下载图片、是否写 frontmatter 等开关，存在浏览器的
+        <code>chrome.storage.local</code> 里；剪藏草稿临时存在 <code>chrome.storage.session</code>（关闭浏览器即失效）。</li>
+    </ul>
+
+    <h2>二、唯一的对外网络请求</h2>
+    <p>扩展只会在你剪藏一篇含图片的网页时，去请求<strong>那个网页里引用的图片地址</strong>，把图片存到本地。
+      请求不携带任何 Cookie（<code>credentials: 'omit'</code>），也不带身份信息。</p>
+    <p>出于安全考虑，扩展<strong>默认拒绝下载内网地址</strong>（<code>localhost</code>、<code>127.0.0.1</code>、
+      <code>192.168.*</code>、<code>10.*</code>、<code>169.254.*</code> 等）的图片，避免被网页用来探测你局域网里的服务。
+      如果你确实需要，可在扩展设置页手动打开开关。</p>
+    <p>除图片下载外，扩展<strong>不发起任何网络请求</strong>：没有统计、没有广告、没有远程配置、没有远程代码。</p>
+
+    <h2>三、权限说明</h2>
+    <table>
+      <tr><th>权限</th><th>用来做什么</th><th>为什么必须</th></tr>
+      <tr><td><code>storage</code></td><td>保存设置与草稿</td><td>纯本地存储，不外传</td></tr>
+      <tr><td><code>contextMenus</code></td><td>右键菜单里的「妙言剪藏：整篇/选中文字/框选/截图」</td><td>这是剪藏的入口</td></tr>
+      <tr><td><code>sidePanel</code></td><td>在侧边栏里编辑与保存剪藏内容</td><td>让你能在保存前改标题、选目录</td></tr>
+      <tr><td><code>activeTab</code></td><td>对当前标签页执行剪藏与截图</td><td>截图剪藏需要用户授权后才能截取当前页</td></tr>
+      <tr><td><code>http://*/*</code>、<code>https://*/*</code></td><td>在网页上注入剪藏浮层、下载正文里的图片</td><td>只在你主动剪藏时才会用到</td></tr>
+    </table>
+
+    <h2>四、网页能不能偷看你的妙言库？</h2>
+    <p>不能。扩展的浮层使用 <strong>closed shadow DOM</strong>，宿主元素 id 每次注入随机生成，
+      网页脚本读不到浮层内容，也就读不到你的目录结构；扩展还拒绝执行来自网页的指令，
+      不会替网页往你的笔记库里写东西。</p>
+
+    <h2>五、数据保存在哪里、怎么删</h2>
+    <p>剪藏结果以 Markdown 文件形式保存在<strong>你授权的目录</strong>里（笔记 <code>.md</code> 文件 + <code>i/</code> 附件目录）。
+      想全部删除，直接在妙言 App 或文件管理器里删除这些文件即可。扩展本身不保存任何副本；
+      撤销授权（设置页「清除授权」）会同时清掉扩展里缓存的目录列表。</p>
+
+    <h2>六、变更与联系</h2>
+    <p>本政策随扩展版本更新，重大变更会在扩展更新说明里注明。有问题可以在扩展的 GitHub 仓库提 issue。</p>
+  </div>
+</main>
+</body>
+</html>
