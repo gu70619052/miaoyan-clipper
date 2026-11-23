@@ -18,10 +18,11 @@
   .box { background: #fffdf8; border: 1px solid #e6dfd1; border-radius: 14px; padding: 8px 26px 26px; }
   table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }
   th, td { border: 1px solid #e6dfd1; padding: 8px 10px; text-align: left; vertical-align: top; }
-  th { background: #f0ead d; background: #f0eadd; white-space: nowrap; }
+  th { background: #f0eadd; white-space: nowrap; }
   code { background: #efe9dd; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
   ul { padding-left: 22px; }
   .ok { color: #1f6f5c; font-weight: 600; }
+  .no { color: #b8442a; font-weight: 600; }
   @media (prefers-color-scheme: dark) {
     body { background: #1e1d1b; color: #e9e6e0; }
     .box { background: #242320; border-color: #302f2d; }
@@ -29,6 +30,8 @@
     th, td { border-color: #302f2d; }
     th { background: #2c2b27; }
     code { background: #2f2e2a; }
+    .ok { color: #4dbf9e; }
+    .no { color: #ff9c86; }
   }
 </style>
 </head>
@@ -39,23 +42,46 @@
 
   <div class="box">
     <h2>一句话结论</h2>
-    <p><span class="ok">本扩展不收集、不上传、不共享任何用户数据。</span>
-      所有剪藏内容只写进你自己电脑上、由你自己授权的妙言笔记库目录（普通本地文件夹或 iCloud Drive 等你自己的同步盘）。
+    <p><span class="ok">本扩展只在你自己的电脑上处理三类数据：网站内容、浏览活动（你剪藏的那个页面网址与时间）、你在侧边栏里输入的标题和标签。</span>
+      这些数据只写进你自己授权的妙言笔记库目录（普通本地文件夹或 iCloud Drive 等你自己的同步盘），
+      <span class="no">不上传、不共享、不出售</span>，也不用于剪藏以外的任何用途。
       扩展没有服务器、没有账号、没有统计代码。</p>
 
-    <h2>一、扩展会碰哪些东西</h2>
+    <h2>一、数据使用披露（与 Chrome 应用商店后台的声明一致）</h2>
+    <table>
+      <tr><th>Chrome 应用商店披露项</th><th>本扩展的情况</th></tr>
+      <tr><td>网站内容（文字、图片、链接）</td>
+        <td><b>会处理</b>：剪藏时读取你当前页面的可见文字与图片，截图剪藏时截取当前标签页的可视区域。
+          在本机转成 Markdown 写入你的笔记目录，不上传。</td></tr>
+      <tr><td>网络记录 / 浏览活动（页面网址、访问时间）</td>
+        <td><b>会处理</b>：记录你正在剪藏的页面网址与剪藏时间（写进笔记的 frontmatter）；
+          浏览器会话里保留「最近活动标签页的网址」，仅用于在侧边栏提示「这篇草稿不是当前页」。
+          <b>不保留浏览历史列表，不上传。</b></td></tr>
+      <tr><td>用户活动（你在扩展里的输入与操作）</td>
+        <td><b>会处理</b>：保存你在侧边栏输入的标题与标签（写进笔记），以及剪藏过的标签页上的 ✓ 角标（只存在于当前浏览器会话）。</td></tr>
+      <tr><td>个人身份信息 / 健康信息 / 财务和付款信息 / 身份验证信息 / 个人通讯 / 位置</td>
+        <td><span class="no">不涉及</span>。扩展不读取密码框、隐藏元素、Cookie、表单值，也不做身份识别或位置推断。
+          网页内容里若含作者名等信息，属于上面的「网站内容」，只做原样搬运。</td></tr>
+    </table>
+    <p>按 Chrome 应用商店的用户数据政策，以上三类属于「<b>只在本机处理</b>」：数据不出你的设备，
+      因此既没有加密传输环节，也没有任何第三方接收方。扩展遵守商店的有限使用要求 ——
+      不出售用户数据、不向第三方传输用户数据、不用于单一用途（网页剪藏）以外的目的，
+      也不允许开发者或雇员查看用户的剪藏内容。</p>
+
+    <h2>二、扩展会碰哪些东西</h2>
     <ul>
       <li><b>网页正文</b>：只有你在网页上主动触发剪藏（点击浮层、右键菜单或扩展图标）时，才会读取当前页面的可见内容，转成 Markdown。</li>
       <li><b>网页图片</b>：剪藏正文里的图片时，扩展会把图片下载到你指定目录下的 <code>i/</code> 附件目录里，
         正文里写成 <code>/i/文件名</code> 引用；图片原地址来自你正在看的那个网页。</li>
       <li><b>截图</b>：只有你主动用「截图剪藏」时才会截取当前标签页的可视区域，截图同样只写入你的笔记目录。</li>
+      <li><b>你输入的标题与标签</b>：侧边栏里填的标题和标签会写进笔记的 frontmatter，用于你日后检索。</li>
       <li><b>你的妙言库目录</b>：第一次使用时，你会手动选择一个目录（通常是
         <code>~/Library/Mobile Documents/iCloud~com~tw93~miaoyan/Documents</code>）。扩展只对这个目录有读写权限。</li>
       <li><b>少量本地设置</b>：默认目标目录、是否下载图片、是否写 frontmatter 等开关，存在浏览器的
         <code>chrome.storage.local</code> 里；剪藏草稿临时存在 <code>chrome.storage.session</code>（关闭浏览器即失效）。</li>
     </ul>
 
-    <h2>二、唯一的对外网络请求</h2>
+    <h2>三、唯一的对外网络请求</h2>
     <p>扩展只会在你剪藏一篇含图片的网页时，去请求<strong>那个网页里引用的图片地址</strong>，把图片存到本地。
       请求不携带任何 Cookie（<code>credentials: 'omit'</code>），也不带身份信息。</p>
     <p>出于安全考虑，扩展<strong>默认拒绝下载内网地址</strong>（<code>localhost</code>、<code>127.0.0.1</code>、
@@ -63,7 +89,7 @@
       如果你确实需要，可在扩展设置页手动打开开关。</p>
     <p>除图片下载外，扩展<strong>不发起任何网络请求</strong>：没有统计、没有广告、没有远程配置、没有远程代码。</p>
 
-    <h2>三、权限说明</h2>
+    <h2>四、权限说明</h2>
     <table>
       <tr><th>权限</th><th>用来做什么</th><th>为什么必须</th></tr>
       <tr><td><code>storage</code></td><td>保存设置与草稿</td><td>纯本地存储，不外传</td></tr>
@@ -73,17 +99,17 @@
       <tr><td><code>http://*/*</code>、<code>https://*/*</code></td><td>在网页上注入剪藏浮层、下载正文里的图片</td><td>只在你主动剪藏时才会用到</td></tr>
     </table>
 
-    <h2>四、网页能不能偷看你的妙言库？</h2>
+    <h2>五、网页能不能偷看你的妙言库？</h2>
     <p>不能。扩展的浮层使用 <strong>closed shadow DOM</strong>，宿主元素 id 每次注入随机生成，
       网页脚本读不到浮层内容，也就读不到你的目录结构；扩展还拒绝执行来自网页的指令，
       不会替网页往你的笔记库里写东西。</p>
 
-    <h2>五、数据保存在哪里、怎么删</h2>
+    <h2>六、数据保存在哪里、怎么删</h2>
     <p>剪藏结果以 Markdown 文件形式保存在<strong>你授权的目录</strong>里（笔记 <code>.md</code> 文件 + <code>i/</code> 附件目录）。
       想全部删除，直接在妙言 App 或文件管理器里删除这些文件即可。扩展本身不保存任何副本；
-      撤销授权（设置页「清除授权」）会同时清掉扩展里缓存的目录列表。</p>
+      撤销授权（设置页「清除授权」）会同时清掉扩展里缓存的目录列表；关闭浏览器即清空会话里的草稿与标签页角标。</p>
 
-    <h2>六、变更与联系</h2>
+    <h2>七、变更与联系</h2>
     <p>本政策随扩展版本更新，重大变更会在扩展更新说明里注明。有问题可以在扩展的 GitHub 仓库提 issue。</p>
   </div>
 </main>
