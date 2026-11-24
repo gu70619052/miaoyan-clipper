@@ -681,7 +681,7 @@ node test/review-check.e2e.mjs    # 25/25 离线端到端
 
 ### 8j.5 现在的实际状态
 
-- launchd 任务 `com.guxueyichen.miaoyan-cws-review` 每 30 分钟跑一次，最近一次 `last exit code = 0`。
+- launchd 任务 `com.guxueyichen.miaoyan-cws-review` 每 **2 小时**跑一次（`StartInterval = 7200`，2026-11-24 按你的要求从 30 分钟调低），最近一次 `last exit code = 0`。
 - 状态文件 `~/.dsh/state/miaoyan-cws-review.json` 现有 `live|0.6.0`（v0.6.0 已报过，不会再报）。
 - 下次提 v0.6.1 并过审 → 会再发一条「✅ 妙言剪藏 v0.6.1 审核通过，已经上线」。
 
@@ -702,7 +702,7 @@ node test/review-check.e2e.mjs    # 25/25 离线端到端
 - 一次性：Cloud Console 建服务账号 → 开发者中心「账号」页加它的 email → `scripts/import-sa-key.sh` 把 JSON 密钥存进钥匙串 → 填 `scripts/cws.config.json` 的 `publisherId`/`itemId`（**已完成**）
 - 每次：改 `manifest.json` 的 version → `node scripts/cws.mjs release`（打包 + 上传 + 提交审核 + 查状态）
 - 只读：`node scripts/cws.mjs status`；撤回：`cancel`
-- 审核结果自动提醒（已装好）：launchd 每 30 分钟查一次，**只在出结果时发一条 QQ**，平时静默；脚本 `~/.dsh/workflows/miaoyan-cws/review-check.mjs`，见 `store/publish-api.md` §十一
+- 审核结果自动提醒（已装好）：launchd 每 2 小时查一次，**只在出结果时发一条 QQ**，平时静默；脚本 `~/.dsh/workflows/miaoyan-cws/review-check.mjs`，见 `store/publish-api.md` §十一
 - 不可自动化：首次建商品、跳过审核、不升版本号发版；另需账号开 2FA
 
 **功能侧可选**

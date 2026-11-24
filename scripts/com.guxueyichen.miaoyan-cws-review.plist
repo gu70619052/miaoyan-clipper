@@ -10,9 +10,9 @@
     <string>/Users/guxueyichen/.dsh/workflows/miaoyan-cws/bin/妙言剪藏-审核检查</string>
   </array>
 
-  <!-- 每 30 分钟查一次；登录后先跑一次 -->
+  <!-- 每 2 小时查一次；登录后先跑一次 -->
   <key>StartInterval</key>
-  <integer>1800</integer>
+  <integer>7200</integer>
   <key>RunAtLoad</key>
   <true/>
 

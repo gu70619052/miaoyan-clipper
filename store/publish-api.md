@@ -138,7 +138,7 @@ node scripts/cws.mjs release
 | 配置 | `~/.dsh/workflows/miaoyan-cws/config.json`（publisherId / itemId / 显示名） |
 | 状态 | `~/.dsh/state/miaoyan-cws-review.json`（已通知过的结果指纹，防重复发） |
 | 日志 | `~/.dsh/logs/miaoyan-cws-review.log` |
-| 定时 | `~/Library/LaunchAgents/com.guxueyichen.miaoyan-cws-review.plist`，每 30 分钟 |
+| 定时 | `~/Library/LaunchAgents/com.guxueyichen.miaoyan-cws-review.plist`，每 2 小时 |
 | 发送通道 | `~/.dsh/scripts/qq-send`（直连 QQ Bot 官方 API，与本机其它日报同一个通道） |
 
 行为：
@@ -148,7 +148,7 @@ node scripts/cws.mjs release
   - 通过：`✅ 妙言剪藏 v0.6.0 审核通过，已经上线` + 商店页与后台链接；
   - 被拒：`❌ 妙言剪藏 v0.6.0 审核没通过` + 提醒去后台看理由；
   - 被下架 / 政策警告：`🚨 被下架` / `⚠️ 政策警告`，各带一句处理建议。
-- 每条结果只发一次；发不出去 → 状态不记账，30 分钟后再试；连续失败 ≥2 次才额外发一条故障告警（冷却 1 小时）。
+- 每条结果只发一次；发不出去 → 状态不记账，下一轮再试；连续失败 ≥2 次才额外发一条故障告警（冷却 1 小时）。
 - 以后提了新版本，会重新进入静默等待，通过后再发一条。
 
 ### 去重规则：记「发生过的事件」，不是「当前状态长什么样」
