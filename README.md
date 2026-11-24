@@ -9,13 +9,13 @@
 | 项目 | 状态 |
 | --- | --- |
 | 扩展源码（可加载） | `output/miaoyan-clipper/` ✅ |
-| 端到端测试 | `output/miaoyan-clipper/test/e2e.mjs`，**90/90 断言通过** ✅ |
+| 端到端测试 | `output/miaoyan-clipper/test/e2e.mjs`，**108/108 断言通过** ✅ |
 | 完整审计（7 个子 agent） | `output/miaoyan-clipper/test/audit/`：186 条用例矩阵 + 4 份专项报告 + 独立复核，**汇总见 `audit/SUMMARY.md`** ✅ |
 | 界面截图 | `output/miaoyan-clipper/test/screenshots/`（7 张，含 `06-全文范围框.png`、`07-无语义类名-默认框.png`）✅ |
 | 真实妙言库写入 | ⚠️ 需你手动授权一次目录（自动化测试用 OPFS 根句柄替代，代码路径完全相同） |
-| Chrome 应用商店上架 | ✅ **v0.6.0 已审核通过并上线**：商店页 <https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>；审核结果由 launchd 定时检查并通过 QQ 通知（见第九节） |
-| GitHub 仓库（源码 + 隐私政策托管） | ✅ <https://github.com/gu70619052/miaoyan-clipper>（公开仓库，42 个文件，Pages 已 built；含 `extension/` 源码、`scripts/` 自动发版与审核监控、`store/` 上架文案、`test/` 监控脚本测试） |
-| 版本 | v0.6.0（权限最小化：安装不申请主机权限，按需注入 + 跨站图片按站点授权） |
+| Chrome 应用商店上架 | 🟡 **v0.7.0 待提交审核**（`node scripts/cws.mjs release` 已可一条命令完成）；线上现行版本 v0.6.0：<https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>；审核结果由 launchd 每 2 小时检查并通过 QQ 通知（见第九节） |
+| GitHub 仓库（源码 + 隐私政策托管） | ✅ <https://github.com/gu70619052/miaoyan-clipper>（公开仓库，Pages 已 built；含 `extension/` 源码、`scripts/` 自动发版与审核监控、`store/` 上架文案、`test/` 监控脚本测试） |
+| 版本 | v0.7.0（正文识别换 Defuddle + 数学公式保真 + 按域名自动归档 + 双链插入）；上一版 v0.6.0 已上线 |
 
 ---
 
@@ -152,7 +152,7 @@ npm install          # 只装 puppeteer-core
 node e2e.mjs         # 或 npm test
 ```
 
-脚本用**本机真实 Chrome** 加载未打包扩展（CDP `Extensions.loadUnpacked`），跑 90 项断言：
+脚本用**本机真实 Chrome** 加载未打包扩展（CDP `Extensions.loadUnpacked`），跑 104 项断言：
 
 | 组 | 内容 | 结果 |
 | --- | --- | --- |
@@ -172,6 +172,15 @@ node e2e.mjs         # 或 npm test
 | N | v0.4.0 截图剪藏端到端（无授权时给可读提示、截屏→框选→JPEG 草稿、截图附件写入 `i/`） | 3/3 |
 | O | v0.5.0 交互优化（三个快捷键已注册、点图标发起剪藏出范围框、面板「剪藏当前页面」按钮、保存后浮层自动关闭、提示条带「继续剪藏」、✓ 角标、标签记忆与预填、上一篇文章提示条） | 9/9 |
 | P | v0.6.0 权限最小化（正式包无 `host_permissions`/`content_scripts`、权限工具函数 pattern 归一与同源免申请、设置页权限卡片可撤销） | 3/3 |
+| Q | v0.7.0 新能力（五种数学写法、Defuddle 已加载、`useAsync:false` 且 fetch 零调用、引擎开关两条路径、随机类名页自研兜底、归档规则纯函数、设置页规则表、面板自动归档、插入双链、KaTeX 块级公式、带 `$` 的公式退回代码块、`<` 还原成 `\lt`、库根目录规则有效且裸后缀不劫持全站） | 19/19 |
+
+**D1 真实站点回归**（A1 的验收环节，见 8k.3）：
+
+```bash
+cd output/miaoyan-clipper/test
+node real-fetch.mjs      # 抓 17 个真实文章页到 site-real/（需联网；HTML 不进 git/商店包）
+node real-compare.mjs    # 新旧正文引擎对照表，明细写 real-compare.json
+```
 
 另有**审核监控脚本**的独立测试（不联网、不发真 QQ）：
 
@@ -687,14 +696,121 @@ node test/review-check.e2e.mjs    # 25/25 离线端到端
 
 ---
 
+## 八k、v0.7.0 剪藏质量：正文识别换引擎 + 公式保真 + 归档提效（2026-11-24）
+
+**你的拍板**（m04403）：竞品调研后选 A1（Defuddle 正文识别）+ A2（数学公式保真）+
+B2（按域名自动归档，你补了一句「b2建议可选关闭」）+ C1（双链插入器），一次发 v0.7.0 走完整流程。
+
+### 8k.1 四项改动
+
+| 项 | 做法 | 你能感觉到什么 |
+| --- | --- | --- |
+| A1 正文识别 | 引入开源提取器 **Defuddle 0.19.13**（MIT，Obsidian 官方剪藏器同款），完整打包进扩展本地运行；自研打分保留做校验与兜底 | MDN / 文档站 / 结构复杂的博客，默认框落得更准 |
+| A2 数学公式 | `converter.js` 新增 MathML / KaTeX / MathJax / `<script type="math/tex">` 四种来源的 LaTeX 提取 | 公式变成 `$…$` / `$$…$$`，在妙言里直接渲染 |
+| B2 域名归档 | `src/lib/autofolder.js`（新）+ 设置页规则表 + 站点黑名单 | 打开后「哪个网站存哪个分类」自动选好，**默认关闭** |
+| C1 双链 | `src/lib/notes.js`（新）枚举库里 `.md` 标题 + 侧边栏「插入双链」浮层 | 光标处一键插入 `[[已有笔记标题]]` |
+
+### 8k.2 A1 的关键取舍：只信 Defuddle 的「同步模式」
+
+Defuddle 有个 `useAsync` 选项（**默认 true**），打开后它会把页面内容交给第三方服务
+（FxTwitter 之类）异步取回。**这与「除图片下载外不发任何请求」的隐私承诺和商店数据声明直接冲突**，
+所以：
+
+- `src/content/extractor.js` 里 `DEFUDDLE_OPTIONS.useAsync = false` 写死，`includeReplies: false`；
+- 测试 **Q7** 除了断言这个常量为 `false`，还把页面里的 `window.fetch` 打桩，
+  跑一次完整剪藏后断言 `fetchCalls === 0`；
+- 只用 `new Defuddle(document, opts).parse()` 这条同步路径，不引 `defuddle/full`
+  （那份多带 temml/turndown/linkedom，体积翻倍且我们不需要）。
+
+### 8k.3 D1 回归：先证明它真的更准，才敢切
+
+按你定的验收口径，抓了 **17 个真实文章页**存成离线 fixture（`test/site-real/`，
+`node test/real-fetch.mjs` 可重抓；这些 HTML 是第三方内容，不进 git、不进商店包），
+用 `node test/real-compare.mjs` 跑新旧两套识别对照，结果存 `test/real-compare.json`。
+
+实测暴露了第一版交叉校验的错误做法：原本「Defuddle 选中 `<body>` 就一律换回自研」太粗暴 ——
+css-tricks 上 Defuddle 选 `div.article-content`（32992 字，正确），自研只选到文章里的
+一列 `div.wp-block-column`（17655 字），按分数比反而选了自研的窄块。
+**改成数据支持的窄口径**：默认听 Defuddle，只有它退回整页 `<body>`/`<html>`、
+**且**自研挑出的块文字量小于整页的 0.8 倍时，才换成自研（典型场景：类名全是随机串的页面）。
+
+| 页面 | 自研选中 | Defuddle 选中 | 采用 |
+| --- | --- | --- | --- |
+| css-tricks 网格指南 | `div.wp-block-column`（文章里的一列） | `div.article-content` | Defuddle |
+| MDN CSS 网格 | `div.code-example`（一段示例） | `main#content.layout__content` | Defuddle |
+| Python 中文教程 | `section`（单个小节） | `div.body`（整节文档） | Defuddle |
+| 维基百科 | `section` | `main#content.mw-body` | Defuddle |
+| Vue 指南 / Go blog / Rust blog / GitHub README | 与 Defuddle 一致或更差 | 一致 | Defuddle |
+| hard-generic（测试页：类名随机串） | `div.a9`（正文列，正确） | `<body>`（整页） | **自研兜底** |
+
+17 个真实页面全部采用 Defuddle 容器；`test/site/hard-generic.html` 仍由自研兜底 —— 两条路径都有断言。
+
+### 8k.4 A2 踩到的真 bug（MathML 的 tagName 是小写）
+
+HTML 文档里的 `<math>` 属于 MathML 命名空间，`el.tagName` 返回**小写 `'math'`**，
+所以 `tag === 'MATH'` 永远不成立，所有公式被当普通文字输出（`x²+y²=z²` 变成 `x`、`a+b` 变成 `a+ba + b`）。
+修法：`isMathElement` / `mathLatex` / `mathIsDisplay` 统一 `String(el.tagName||'').toUpperCase()`，
+并在 `renderInlineNode` 开头先拦数学节点（`switch (tag)` 里加 `case 'MATH'` 匹配不到）。
+
+另一个坑：Defuddle 会把与文章标题重复的首个 `<h1>` 删掉，且它的噪声过滤认不出中文站的
+「猜你喜欢 / 热门排行 / 广告位」→ `markdownFromDefuddle()` 现在会再过一遍我们自己的
+`cleanArticle()` 与垃圾过滤，并在开头补回 `# 标题`。
+
+### 8k.5 测试
+
+`node test/e2e.mjs` → **108/108 全绿**（A2/B14/C11/D7/E3/F3/G6/H9/I5/J3/K6/L4/M2/N3/O9/P3/Q19）。
+新增 Q 组 19 项覆盖：五种数学写法、Defuddle 已加载、`useAsync:false` + fetch 零调用、
+引擎开关两条路径、随机类名页兜底、归档规则纯函数、设置页规则表、面板自动归档、插入双链，
+以及审计后补的 4 项（KaTeX 块级、带 `$` 的公式退回代码块、`<` 还原成 `\lt`、库根目录规则 + 裸后缀不劫持全站）。
+`node test/real-compare.mjs` → 17 个真实页面仍全部采用 Defuddle 容器，自研兜底 0 个。
+
+### 8k.5.1 子 agent 审计：2 个 P1 + 14 个 P2，修完再发
+
+这一轮专门拉了一个子 agent（`FallbacksChain/chain-1`，推理档位 `max`）做代码审计，
+它按 8 条清单逐项查：**隐私红线、注入安全、XSS、路径穿越、权限模型、回退健壮性、
+默认值一致性、妙言格式约定**。
+
+结论：**没有 P0** —— 隐私红线（同步 parse 全程不进 fetch，vendor 里没有 XHR / sendBeacon /
+WebSocket / analytics；全仓只有图片下载一处 fetch）、权限模型（没有 host_permissions、
+没有 content_scripts、没有 web_accessible_resources）、注入安全（DOMParser 文档从不 append 回真实页面）、
+XSS、路径穿越、妙言格式，全部核查通过。
+
+它找出 **2 个 P1**（都在 A2 数学上，之前测试没覆盖到）：
+
+| 编号 | 问题 | 修法 |
+| --- | --- | --- |
+| P1-1 | `cleanArticle()` 无条件删掉所有 `<script>`，而 Defuddle 特意保留 `<script type="math/tex">` → MathJax 2 页面的公式整段丢失 | 删除选择器改成 `script:not([type^="math/"]), …` |
+| P1-2 | 真实 KaTeX 块级 DOM 是 `<span class="katex-display"><span class="katex">`，我们命中内层 `.katex`，只看自身 class → 块级公式被降级成行内 `$…$` | `mathIsDisplay()` 连父级一起看：`closest('.katex-display')` |
+
+14 个 P2 也一并修完（摘要）：强制 `useAsync:false` 不被调用方覆盖、规则目录失效时把目录选择器清空、
+自动归档关闭时不再全量扫目录树、「库根目录」算有效规则目标、裸后缀 `com`/`cn` 不再劫持全站、
+双链列表加枚举上限、「正文来源」与「框的位置」解耦（Defuddle 选择器在克隆文档上算，真实文档偶尔定位不到时正文不丢）、
+公式含 `$` 时退回 ```math 代码块、`<`/`>` 还原成 `\lt`/`\gt`、双链标题消毒、
+子目录同名笔记显示「标题（目录）」、`useDefuddle` 读取防空、版本号升到 0.7.0。
+
+其中「正文来源与框的位置解耦」这条值得单独说：
+`planArticle()` 现在返回 `contentFrom`（正文从哪来）与 `engine`（框画在哪）两个字段 ——
+Defuddle 选出来的元素在真实 DOM 里偶尔定位不到时，框会退回自研容器，
+但**正文仍然用 Defuddle 清洗好的那份**，不至于整篇丢失；反过来，
+如果我们主动换成自研容器（Defuddle 退回整页），正文必须跟着换，否则框和内容对不上。
+
+### 8k.6 权限与声明：一个字都没变
+
+`permissions` 仍是 `activeTab / scripting / tabs / storage / contextMenus / sidePanel`，
+`optional_host_permissions` 仍是两项，**没有新增权限、没有新增对外请求**；
+商店「数据使用声明」与隐私政策的勾选口径不变，只在隐私政策里补了
+「Defuddle 本地打包、异步模式已关闭、有测试断言」这一段（`PRIVACY.md` §三 与 `store/privacy.html`）。
+
+---
+
 ## 十、后续可做（未做，等你决定）
 
 **v0.6.0 已上架并通过审核**（2026-11-24）→ <https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>
 下面这段保留作为「下一次改动要做的事」的清单：
 
 1. ~~把 `output/miaoyan-clipper/store/privacy.html` 托管到公开地址~~ ✅ 已完成：<https://gu70619052.github.io/miaoyan-clipper/>，商店后台填的就是这个地址
-2. ~~按 `store/listing.md` 打包 zip~~ ✅ 已完成：`output/miaoyan-clipper-0.6.0-store.zip`（33 文件 118 KB），已挂到 Release v0.6.0
-3. ~~上传商店后台素材与文案~~ ✅ 已完成并过审
+2. ~~按 `store/listing.md` 打包 zip~~ ✅ 已完成：`output/miaoyan-clipper-0.7.0-store.zip`（37 文件 226 KB），挂到 Release v0.7.0
+3. ~~上传商店后台素材与文案~~ ✅ 已完成并过审（v0.6.0，2026-11-24）
 4. **仍待人工做一次**：点一次扩展图标，验证「截图剪藏」这条 activeTab 路径（自动化跑不了，见 8e.4）
 
 **以后怎么发新版（已经接好，见 `output/miaoyan-clipper/store/publish-api.md`）**
@@ -708,7 +824,7 @@ node test/review-check.e2e.mjs    # 25/25 离线端到端
 **功能侧可选**
 
 - 批量剪藏 / 剪藏历史列表
-- 按规则自动归档（域名 → 分类）
+- ~~按规则自动归档（域名 → 分类）~~ ✅ v0.7.0 已做（默认关闭，设置页可开）
 - 剪藏时保留原网页 HTML（ENML 风格）与「阅读原文」跳转
 - 真正的 iframe 正文支持（现在只提示，不进去）
-- 识别质量在真实站点上的抽样回归（现在只有 5 个自建测试页）
+- ~~识别质量在真实站点上的抽样回归~~ ✅ v0.7.0 已做（17 个真实页面 fixture 对照）

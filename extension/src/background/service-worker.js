@@ -8,6 +8,7 @@ import { getSettings } from '../lib/settings.js';
 import { getRootHandle, ensurePermission } from '../lib/fsdb.js';
 import { readFolderTree } from '../lib/foldercache.js';
 import { originPattern } from '../lib/permissions.js';
+import { resolveAutoFolder } from '../lib/autofolder.js';
 
 /**
  * v0.6.0 起不再静态注入内容脚本，改为「用到才注入」。
@@ -19,6 +20,12 @@ const CONTENT_FILES = [
   'src/content/converter.js',
   'src/content/content.js',
 ];
+
+/**
+ * Defuddle 正文识别器（v0.7.0）。
+ * 350KB，只在「整篇正文」剪藏时注入；其它剪藏方式用不上。
+ */
+const DEFUDDLE_FILE = 'src/vendor/defuddle.min.js';
 
 const MENU_ITEMS = [
   { id: 'myclip-select', title: '妙言剪藏：框选剪藏', contexts: ['page'] },
@@ -93,12 +100,15 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 /** 把内容脚本注入到指定标签页（内容脚本内部有幂等守卫，重复注入不会重复绑定） */
-async function ensureContent(tabId) {
+async function ensureContent(tabId, mode) {
   if (tabId == null) return { ok: false, error: '标签页不可用' };
+  // 只有「整篇正文」用得到 Defuddle，其它方式不注入这 350KB
+  const files =
+    mode === 'article' ? [DEFUDDLE_FILE].concat(CONTENT_FILES) : CONTENT_FILES.slice();
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: CONTENT_FILES,
+      files,
     });
     return { ok: true };
   } catch (err) {
@@ -118,7 +128,7 @@ async function startClipOnTab(tab, mode) {
     await openPanel(tab.id);
     return { ok: false, error: '当前页面不支持剪藏（file:// / chrome:// / 应用商店页面）' };
   }
-  const injected = await ensureContent(tab.id);
+  const injected = await ensureContent(tab.id, mode);
   if (!injected.ok) {
     notifyUnsupportedPage(tab.id, url);
     await openPanel(tab.id);
@@ -299,6 +309,41 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             }
           }
           sendResponse(res);
+        })
+        .catch((err) => sendResponse({ ok: false, error: String(err && err.message) }));
+      return true;
+    }
+
+    case 'MYCLIP_AUTO_FOLDER': {
+      // v0.7.0：按域名自动归档。
+      // 页内浮层是普通脚本（不能 import 模块），所以在这里问后台要答案，
+      // 避免匹配逻辑在两个地方各写一份、以后改起来漏掉一处。
+      getSettings()
+        .then(async (settings) => {
+          // 功能关着就立刻回，不要为了「可能命中」去递归枚举整棵目录树
+          // （iCloud 目录下每次剪藏都全量扫描代价很大）。
+          if (!settings || settings.autoArchive !== true) {
+            sendResponse({ ok: true, matched: false, folder: '', pattern: '', missing: false });
+            return;
+          }
+          const folders = await listFolders();
+          let list = folders.folders || [];
+          if (!folders.ok || !list.length) {
+            const cache = await readFolderTree();
+            if (cache && cache.folders && cache.folders.length) list = cache.folders;
+          }
+          const hit = resolveAutoFolder(msg.url || '', settings, list);
+          if (!hit) {
+            sendResponse({ ok: true, matched: false, folder: '', pattern: '', missing: false });
+            return;
+          }
+          sendResponse({
+            ok: true,
+            matched: true,
+            folder: hit.missing ? '' : hit.folder,
+            pattern: hit.pattern,
+            missing: !!hit.missing,
+          });
         })
         .catch((err) => sendResponse({ ok: false, error: String(err && err.message) }));
       return true;

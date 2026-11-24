@@ -290,9 +290,12 @@
   /** 清理容器：删掉噪音节点，返回克隆 */
   function cleanArticle(el) {
     const clone = el.cloneNode(true);
-    // 去掉 script/style 之类
+    // 去掉 script/style 之类。
+    // 注意：script[type^="math/"] 是 MathJax 2 存放 TeX 源码的地方，
+    // Defuddle 自己也特意保留它（stripUnsafeElements 只删非 math/ 的 script），
+    // 这里必须跟着保留，否则公式会在转换前就被丢掉。
     Array.prototype.forEach.call(
-      clone.querySelectorAll('script, style, noscript, template, iframe, object, embed, canvas, svg'),
+      clone.querySelectorAll('script:not([type^="math/"]), style, noscript, template, iframe, object, embed, canvas, svg'),
       (n) => n.remove()
     );
     // 命中 JUNK_SELECTORS 的节点
@@ -386,6 +389,206 @@
     };
   }
 
+  // --------------------------------------------------------------
+  // Defuddle 正文识别（v0.7.0）
+  //
+  // Defuddle 是 Obsidian 官方剪藏器在用的开源正文提取器（MIT），
+  // 我们把它的浏览器构建 vendor 进来，只用它做「找出正文并清洗」，
+  // Markdown 输出仍然走我们自己的转换器（这样才能输出妙言要的格式）。
+  // --------------------------------------------------------------
+
+  /**
+   * Defuddle 的调用选项。
+   *
+   * useAsync 必须保持 false：Defuddle 的异步模式会去第三方站点抓内容
+   * （例如 FxTwitter），那会破坏本扩展「不向外部服务器发送任何数据」的承诺，
+   * 也会和 Chrome 应用商店里的数据使用声明冲突。
+   */
+  const DEFUDDLE_OPTIONS = {
+    markdown: false,
+    separateMarkdown: false,
+    useAsync: false,
+    includeReplies: false, // 评论不要
+    removeHiddenElements: true,
+    removeLowScoring: true,
+    removeSmallImages: true,
+    standardize: true,
+    debug: true, // 为了拿 contentSelector
+  };
+
+  /** 当前页面能不能用 Defuddle（vendor 没注入 / 页面上没有全局对象） */
+  function defuddleAvailable() {
+    return typeof window.Defuddle === 'function';
+  }
+
+  /**
+   * 跑一次 Defuddle 解析（同步）。
+   * @param {object} [options] 覆盖默认选项
+   * @returns {object|null} Defuddle 响应；不可用 / 抛错 / 内容太空时返回 null
+   */
+  function defuddleExtract(options = {}) {
+    if (!defuddleAvailable()) return null;
+    const opts = Object.assign({}, DEFUDDLE_OPTIONS, options || {});
+    // 隐私红线：useAsync / includeReplies 必须在合并之后强制关掉，
+    // 否则调用方传参就能打开（那两项会让 Defuddle 把页面内容发给第三方服务）。
+    opts.useAsync = false;
+    opts.includeReplies = false;
+    if (!opts.url) opts.url = location.href;
+    const origLog = console.log;
+    let res = null;
+    try {
+      // Defuddle 在 debug 模式下会往控制台刷调试日志，剪藏时不需要，屏蔽掉。
+      // parse() 是同步的，期间不会有别的页面代码运行，屏蔽是安全的。
+      console.log = () => {};
+      res = new window.Defuddle(document, opts).parse();
+    } catch (err) {
+      res = null;
+    } finally {
+      console.log = origLog;
+    }
+    if (!res || !res.content || !String(res.content).trim()) return null;
+    // 文字太少的多半是选错了容器（登录页、错误页、纯导航页），当作失败处理
+    if (typeof res.wordCount === 'number' && res.wordCount < 30) return null;
+    return res;
+  }
+
+  /**
+   * 把 Defuddle 选中的容器定位回真实 DOM 元素。
+   * 这样「调整范围」的框画在哪里，保存下来的就是哪一块。
+   */
+  function defuddleElement(res) {
+    const sel = res && res.debug && res.debug.contentSelector;
+    if (!sel) return null;
+    let el = null;
+    try {
+      el = document.querySelector(sel);
+    } catch (err) {
+      el = null;
+    }
+    if (!el) return null;
+    const text = textOf(el);
+    if (!text || text.length < 40) return null;
+    return el;
+  }
+
+  /**
+   * Defuddle 选中的容器和自研打分选中的容器，挑更像「正文」的那个。
+   *
+   * 依据是 D1 真实站点回归（test/site-real，14 个真实页面，见 test/real-compare.json）：
+   *   - 类名有语义时两者选的常是同一个容器；
+   *   - Defuddle 在 css-tricks / MDN / python 文档 / wiki / vue 上比自研选得更完整、更准；
+   *   - 唯一稳定的失败模式是「Defuddle 退回整页 body」
+   *     （hard-generic.html：类名全是随机串的页面，它选了 body，
+   *      而自研能挑出正文列）—— 只有这一种情况我们改用自研容器。
+   * 所以规则是：默认听 Defuddle 的，只有它退回整页、而自研挑出了一个
+   * 明显比整页小的块时，才换成自研的结果。
+   */
+  function pickContainer(defEl, legacyEl) {
+    if (!defEl) return legacyEl;
+    if (!legacyEl) return defEl;
+    if (defEl === legacyEl) return defEl;
+    const tag = String(defEl.tagName || '').toUpperCase();
+    if (tag === 'BODY' || tag === 'HTML') {
+      const dLen = textOf(defEl).length;
+      const lLen = textOf(legacyEl).length;
+      // 自研选的块比整页小两成以上，说明它真的找到了正文列
+      if (lLen && lLen < dLen * 0.8) return legacyEl;
+    }
+    return defEl;
+  }
+
+  /**
+   * 规划一次「整篇正文」剪藏。
+   * 优先用 Defuddle 的正文容器，失败（或页面不支持）时回退到自研提取器。
+   *
+   * engine 说明「框画在哪」，contentFrom 说明「正文从哪来」——
+   * 两者分开是因为：Defuddle 的选择器是在克隆文档上算的，在真实文档里
+   * 偶尔定位不到元素（动态页面），这时它的正文内容其实还是好的，
+   * 不该因为框没画准就把整篇正文丢掉。
+   * @returns {{element: Element|null, defuddle: object|null, engine: 'defuddle'|'legacy',
+   *            contentFrom: 'defuddle'|'legacy', matched: boolean}}
+   */
+  function planArticle(options = {}) {
+    // 用户在设置里关掉了「用 Defuddle 识别正文」时，完全走回原来的自研打分逻辑
+    if (options.useDefuddle === false) {
+      return { element: findArticle(), defuddle: null, engine: 'legacy', contentFrom: 'legacy', matched: false };
+    }
+    const res = defuddleExtract(options);
+    if (res) {
+      const defEl = defuddleElement(res);
+      const legacyEl = findArticle();
+      const chosen = pickContainer(defEl, legacyEl);
+      const usedDefuddle = !!defEl && chosen === defEl;
+      return {
+        element: chosen || legacyEl,
+        defuddle: res,
+        engine: usedDefuddle ? 'defuddle' : 'legacy',
+        // 框定位失败（defEl 为 null）时，Defuddle 的正文仍然可用；
+        // 但如果是我们主动换用了自研容器（Defuddle 退回整页），正文必须跟着换。
+        contentFrom: res && (usedDefuddle || !defEl) ? 'defuddle' : 'legacy',
+        matched: !!defEl,
+      };
+    }
+    return { element: findArticle(), defuddle: null, engine: 'legacy', contentFrom: 'legacy', matched: false };
+  }
+
+  /**
+   * 把 Defuddle 清洗好的 HTML 转成 Markdown（仍然用我们自己的转换器）。
+   *
+   * 两件事要在这里补上：
+   * 1. 再过一遍我们自己的垃圾过滤（cleanArticle）——Defuddle 的过滤规则和我们的
+   *    不一样，中文站的「猜你喜欢 / 热门排行 / 广告位」这类小节它认不出来，
+   *    交给我们的规则处理更稳；
+   * 2. 把被 Defuddle 删掉的首个标题补回来 ——Defuddle 会把与文章标题重复的
+   *    第一个标题删掉，但我们的笔记正文里一直保留它（和 v0.6.0 的行为一致）。
+   * @returns {{markdown:string, images:Array}|null}
+   */
+  function markdownFromDefuddle(res, base, element) {
+    if (!res || !res.content) return null;
+    const converter = window.MiaoYanConverter;
+    if (!converter || typeof converter.convert !== 'function') return null;
+    let doc = null;
+    try {
+      doc = new DOMParser().parseFromString(String(res.content), 'text/html');
+    } catch (err) {
+      return null;
+    }
+    const body = doc && doc.body;
+    if (!body) return null;
+    const cleaned = cleanArticle(body);
+    const out = converter.convert(cleaned, { base: base || location.href });
+    let markdown = (out && out.markdown) || '';
+    const images = (out && out.images) || [];
+    if (element && element.querySelector) {
+      const h1 = element.querySelector('h1');
+      const h1Text = h1 ? textOf(h1).trim() : '';
+      if (h1Text && !/^#{1,3}\s/.test(markdown.trim())) {
+        markdown = `# ${h1Text}\n\n${markdown.trim()}`;
+      }
+    }
+    return { markdown, images };
+  }
+
+  /**
+   * 把 Defuddle 读到的元信息补进我们的 pageMeta。
+   * 我们自己读到的（og:title 等）优先，Defuddle 只补空缺。
+   */
+  function mergeMeta(meta, res) {
+    const out = Object.assign({}, meta || {});
+    if (!res) return out;
+    const fill = (key, value) => {
+      if (!out[key] && value) out[key] = String(value).trim();
+    };
+    fill('title', res.title);
+    fill('author', res.author);
+    fill('date', res.published);
+    fill('description', res.description);
+    fill('lang', res.language);
+    if (res.favicon) out.favicon = String(res.favicon).trim();
+    if (res.wordCount) out.wordCount = res.wordCount;
+    return out;
+  }
+
   window.MiaoYanExtractor = {
     findArticle,
     scoreByParagraphs,
@@ -395,5 +598,13 @@
     pageMeta,
     textOf,
     isSmallRelative,
+    // v0.7.0：Defuddle 正文识别
+    defuddleAvailable,
+    defuddleExtract,
+    defuddleElement,
+    planArticle,
+    markdownFromDefuddle,
+    mergeMeta,
+    DEFUDDLE_OPTIONS,
   };
 })();

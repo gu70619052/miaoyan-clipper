@@ -402,9 +402,132 @@
     return `\n\n${lines.join('\n')}\n\n`;
   }
 
+  // ---------------------------------------------------------------- 数学公式（v0.7.0）
+  //
+  // 妙言支持 $...$ / $$...$$（KaTeX 语法，含 mhchem 的 \ce{} \pu{}）。
+  // 网页上的公式有三种常见形态：
+  //   1. <math>…</math>：原生 MathML（Defuddle 标准化后会带上 data-latex）
+  //   2. <span class="katex">：KaTeX 渲染出来的（HTML 和 MathML 双份）
+  //   3. <script type="math/tex">：老式写法
+  // 我们统一还原成 LaTeX 源码，输出 $...$（行内）或 $$...$$（独立成段）。
+
+  /** 这个元素是不是「一个公式」（而不是普通文字） */
+  function isMathElement(el) {
+    if (!el || el.nodeType !== 1) return false;
+    // 注意：HTML 里的 <math> 会被解析成 MathML 命名空间元素，
+    // 它的 tagName 是小写的 'math'，所以这里统一转成大写再比。
+    const tag = String(el.tagName || '').toUpperCase();
+    if (tag === 'MATH') return true;
+    if (tag === 'MJX-CONTAINER') return true;
+    if (tag === 'SCRIPT') {
+      const type = String(el.getAttribute('type') || '').toLowerCase();
+      return type.startsWith('math/tex');
+    }
+    if (tag === 'SPAN') {
+      const cls = String(el.getAttribute('class') || '');
+      return /(^|\s)katex(\s|$)/.test(cls);
+    }
+    return false;
+  }
+
+  /** 从一个数学节点里取 LaTeX 源码，取不到返回空串 */
+  function mathLatex(el) {
+    if (!el) return '';
+    const tag = String(el.tagName || '').toUpperCase();
+    if (tag === 'SCRIPT') {
+      return String(el.textContent || '').trim();
+    }
+    if (tag === 'MJX-CONTAINER') {
+      const inner = el.querySelector('math');
+      const latex = latexFromMathNode(inner);
+      if (latex) return latex;
+      // MathJax 偶尔把原始 TeX 放在前一个 script 里
+      const prev = el.previousElementSibling;
+      if (prev && prev.tagName === 'SCRIPT' && /math\/tex/i.test(prev.getAttribute('type') || '')) {
+        return String(prev.textContent || '').trim();
+      }
+      return '';
+    }
+    if (tag === 'SPAN' && /(^|\s)katex(\s|$)/.test(el.getAttribute('class') || '')) {
+      // KaTeX 会同时输出 MathML 和排版后的 HTML，只取 MathML 那一份
+      const inner = el.querySelector('math');
+      return latexFromMathNode(inner);
+    }
+    return latexFromMathNode(el);
+  }
+
+  /** <math> 节点里取 LaTeX：data-latex → alttext → annotation */
+  function latexFromMathNode(el) {
+    if (!el) return '';
+    const attr = el.getAttribute('data-latex') || el.getAttribute('alttext');
+    if (attr && attr.trim()) return restoreLessGreater(attr.trim());
+    const ann = el.querySelector('annotation[encoding="application/x-tex"]');
+    if (ann) {
+      const text = String(ann.textContent || '').trim();
+      if (text) return restoreLessGreater(text);
+    }
+    return '';
+  }
+
+  /**
+   * MathJax 的 annotation 里写的是 &lt; / &gt;，浏览器解析 HTML 时已经把它们
+   * 变成真正的 < 与 >。直接输出会让妙言把后面的内容当成 HTML 吃掉，
+   * 所以还原成 LaTeX 的 \lt / \gt。
+   */
+  function restoreLessGreater(text) {
+    return String(text).replace(/</g, '\\lt ').replace(/>/g, '\\gt ');
+  }
+
+  /** 公式是不是「独立成段」（block） */
+  function mathIsDisplay(el) {
+    if (!el) return false;
+    const tag = String(el.tagName || '').toUpperCase();
+    if (tag === 'MJX-CONTAINER') {
+      return el.getAttribute('display') === 'true' || /(^|\s)display(\s|$)/.test(el.getAttribute('class') || '');
+    }
+    if (tag === 'MATH') {
+      return el.getAttribute('display') === 'block';
+    }
+    if (tag === 'SCRIPT') {
+      return /mode=display/i.test(el.getAttribute('type') || '');
+    }
+    // KaTeX 的块级结构是 <span class="katex-display"><span class="katex">…</span></span>，
+    // 我们命中的是内层 .katex，所以要连父级一起看。
+    if (/(^|\s)katex(\s|$)/.test(el.getAttribute('class') || '')) {
+      if (/(^|\s)katex-display(\s|$)/.test(el.getAttribute('class') || '')) return true;
+      const parent = el.closest && el.closest('.katex-display');
+      if (parent) return true;
+    }
+    return /(^|\s)katex-display(\s|$)/.test(el.getAttribute('class') || '');
+  }
+
+  /**
+   * 把公式节点转成妙言能渲染的 LaTeX。
+   * @returns {string} 例如 `$E = mc^2$` 或 `\n\n$$\nE = mc^2\n$$\n\n`
+   */
+  function renderMath(el) {
+    const raw = mathLatex(el);
+    if (!raw) return '';
+    let body = raw.trim();
+    // 去掉公式自带的定界符，避免和我们的 $ 打架
+    body = body.replace(/^\$(?!\$)/, '').replace(/(?<!\\)\$$/, '').trim();
+    if (!body) return '';
+    // 公式内部还有 $（MathJax 2 的 equation* 环境常见）会让 $…$ 提前闭合，
+    // 这类改用 ```math 代码块，妙言里也能当公式看。
+    if (body.includes('$') || /\\ce\{|\\pu\{/.test(body)) {
+      return `\n\n\`\`\`math\n${body}\n\`\`\`\n\n`;
+    }
+    if (mathIsDisplay(el)) return `\n\n$$\n${body}\n$$\n\n`;
+    return `$${body}$`;
+  }
+
   function renderInlineNode(el, ctx) {
+    // 公式先拦下来（MathML 的 tagName 是小写 'math'，switch 里匹配不到）
+    if (isMathElement(el)) return renderMath(el);
     const tag = el.tagName;
     switch (tag) {
+      case 'MATH':
+        return renderMath(el);
       case 'BR':
         return '\n';
       case 'STRONG':
@@ -489,6 +612,10 @@
         return;
       }
       if (child.nodeType !== 1) return;
+      if (isMathElement(child)) {
+        out += renderMath(child);
+        return;
+      }
       if (SKIP_TAGS.has(child.tagName)) return;
       if (isHidden(child)) return;
       out += renderInlineNode(child, ctx);
@@ -564,6 +691,18 @@
         return;
       }
       if (child.nodeType !== 1) return;
+      if (isMathElement(child)) {
+        const md = renderMath(child);
+        if (!md) return;
+        // 独立成段的公式要另起一段；行内公式接着当前段落写
+        if (md.charAt(0) === '\n') {
+          flush();
+          out += md;
+        } else {
+          buf += md;
+        }
+        return;
+      }
       if (SKIP_TAGS.has(child.tagName)) return;
       if (isHidden(child)) return;
       if (BLOCK_TAGS.has(child.tagName)) {
@@ -612,5 +751,9 @@
     convertRange,
     escapeText,
     absUrl,
+    // v0.7.0：数学公式
+    isMathElement,
+    mathLatex,
+    renderMath,
   };
 })();

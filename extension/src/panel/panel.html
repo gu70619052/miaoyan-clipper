@@ -70,6 +70,16 @@
         <span class="muted tiny" id="draft-meta"></span>
       </div>
 
+      <!-- v0.7.0：插入指向已有笔记的双链 -->
+      <div class="editor-tools">
+        <button id="btn-wikilink" class="btn ghost tiny" title="插入指向库里已有笔记的双链">插入双链</button>
+      </div>
+      <div id="wikilink-pop" class="wikilink-pop" hidden>
+        <input id="wikilink-search" type="text" placeholder="搜索已有笔记标题…" autocomplete="off" />
+        <ul id="wikilink-list"></ul>
+        <p id="wikilink-empty" class="muted tiny" hidden>没有找到匹配的笔记</p>
+      </div>
+
       <textarea id="input-markdown" spellcheck="false" placeholder="Markdown 内容"></textarea>
       <div id="preview" class="preview" hidden></div>
 
@@ -82,6 +92,11 @@
         <div id="new-folder-row" class="row" hidden>
           <input id="input-new-folder" type="text" placeholder="新目录名，如：技术笔记" />
           <button id="btn-new-folder-ok" class="btn ghost">确定</button>
+        </div>
+        <!-- v0.7.0：命中「按域名自动归档」规则时提示，并可一键对该站点关闭 -->
+        <div id="auto-folder-note" class="auto-note" hidden>
+          <span id="auto-folder-text"></span>
+          <button id="btn-disable-auto" class="btn ghost tiny">此站点不再自动归档</button>
         </div>
       </div>
 

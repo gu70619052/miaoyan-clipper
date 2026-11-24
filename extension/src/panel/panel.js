@@ -17,7 +17,9 @@ import {
 } from '../lib/fsdb.js';
 import { listFolders, saveDraft } from '../lib/writer.js';
 import { cacheFolderTree } from '../lib/foldercache.js';
-import { getSettings } from '../lib/settings.js';
+import { getSettings, setSettings } from '../lib/settings.js';
+import { listNoteTitles, filterNotes } from '../lib/notes.js';
+import { resolveAutoFolder, withDisabledHost } from '../lib/autofolder.js';
 import {
   originPattern,
   hasOriginPermission,
@@ -53,12 +55,22 @@ const el = {
   statusbar: $('statusbar'),
   newFolderRow: $('new-folder-row'),
   newFolderInput: $('input-new-folder'),
+  // v0.7.0
+  autoFolderNote: $('auto-folder-note'),
+  autoFolderText: $('auto-folder-text'),
+  btnDisableAuto: $('btn-disable-auto'),
+  btnWikilink: $('btn-wikilink'),
+  wikilinkPop: $('wikilink-pop'),
+  wikilinkSearch: $('wikilink-search'),
+  wikilinkList: $('wikilink-list'),
+  wikilinkEmpty: $('wikilink-empty'),
 };
 
 let currentDraft = null;
 let folders = [];
 let rootName = '';
 let pendingReauthor = null;   // 权限失效时暂存的保存请求，重新授权后自动续存
+let allNotes = [];            // 库里已有的笔记标题（插入双链用）
 const handledPending = new Set();   // 已处理过的 pendingSave 请求（按 at 去重，防重复保存）
 
 // ---------------------------------------------------------------- 工具
@@ -344,6 +356,141 @@ async function loadDraft() {
   renderPreview();
   await prefillTags();
   await markStale(draft);
+  await applyAutoArchive(draft);
+}
+
+/**
+ * v0.7.0：按域名自动归档。
+ *
+ * 命中规则时把目标目录切到规则指定的目录，并提示用户；
+ * 用户仍然可以在下拉框里临时改成别的目录。
+ * 规则表为空、或总开关关闭时，这里什么都不做（行为和 v0.6.0 完全一致）。
+ */
+async function applyAutoArchive(draft) {
+  if (!el.autoFolderNote) return;
+  el.autoFolderNote.hidden = true;
+  if (!draft || !draft.url) return;
+  let settings = null;
+  try {
+    settings = await getSettings();
+  } catch (err) {
+    return;
+  }
+  if (!settings || settings.autoArchive !== true) return;
+  const hit = resolveAutoFolder(draft.url, settings, folders);
+  if (!hit) return;
+  if (hit.missing) {
+    // 规则指向的目录没了：把下拉框清空，
+    // 否则会留在上一次记住的目录（settings.lastFolder），存错地方。
+    el.folder.value = '';
+    el.autoFolderText.textContent = `规则「${hit.pattern}」指向的目录已经不存在，已退回库根目录`;
+    el.autoFolderNote.hidden = false;
+    return;
+  }
+  if ([...el.folder.options].some((o) => o.value === hit.folder)) {
+    el.folder.value = hit.folder;
+  }
+  el.autoFolderText.textContent =
+    hit.folder === ''
+      ? `已按域名规则「${hit.pattern}」归档到「（库根目录）」`
+      : `已按域名规则「${hit.pattern}」归档到「${hit.folder}」`;
+  el.autoFolderNote.hidden = false;
+}
+
+/** 「此站点不再自动归档」：把当前域名加进黑名单 */
+async function disableAutoArchiveForThisSite() {
+  if (!currentDraft || !currentDraft.url) return;
+  try {
+    const settings = await getSettings();
+    const next = withDisabledHost(settings, currentDraft.url);
+    await setSettings({ archiveDisabledHosts: next.archiveDisabledHosts });
+    if (el.autoFolderNote) el.autoFolderNote.hidden = true;
+    setStatus('这个站点以后不再自动归档', 'ok');
+  } catch (err) {
+    setStatus('保存设置失败', 'err');
+  }
+}
+
+// ---------------------------------------------------------------- 双链插入（v0.7.0）
+
+/** 打开/关闭「插入双链」面板 */
+async function toggleWikilink() {
+  if (!el.wikilinkPop) return;
+  if (!el.wikilinkPop.hidden) {
+    el.wikilinkPop.hidden = true;
+    return;
+  }
+  el.wikilinkPop.hidden = false;
+  el.wikilinkSearch.value = '';
+  try {
+    const handle = await getRootHandle();
+    if (!handle) {
+      el.wikilinkList.innerHTML = '';
+      el.wikilinkEmpty.textContent = '还没有授权妙言库目录';
+      el.wikilinkEmpty.hidden = false;
+      return;
+    }
+    const granted = await ensurePermission(handle, 'read', false);
+    if (!granted) {
+      el.wikilinkList.innerHTML = '';
+      el.wikilinkEmpty.textContent = '目录权限需要确认一次，请先完成上面的授权';
+      el.wikilinkEmpty.hidden = false;
+      return;
+    }
+    allNotes = await listNoteTitles(handle, { maxDepth: 3, limit: 500 });
+    renderWikilinkList('');
+    el.wikilinkSearch.focus();
+  } catch (err) {
+    el.wikilinkList.innerHTML = '';
+    el.wikilinkEmpty.textContent = `读取笔记列表失败：${(err && err.message) || err}`;
+    el.wikilinkEmpty.hidden = false;
+  }
+}
+
+function renderWikilinkList(keyword) {
+  const list = filterNotes(allNotes, keyword);
+  el.wikilinkList.innerHTML = '';
+  list.slice(0, 100).forEach((n) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'wikilink-item';
+    // 同名笔记可能分布在不同目录，显示时带上目录以便区分
+    const inDir = n.path && n.path.includes('/');
+    btn.textContent = inDir ? `${n.title}（${n.path.slice(0, n.path.lastIndexOf('/'))}）` : n.title;
+    btn.title = n.path;
+    btn.addEventListener('click', () => insertWikilink(n.title));
+    li.appendChild(btn);
+    el.wikilinkList.appendChild(li);
+  });
+  el.wikilinkEmpty.hidden = list.length > 0;
+  if (!list.length) el.wikilinkEmpty.textContent = '没有找到匹配的笔记';
+}
+
+/**
+ * 在光标处插入 [[标题]]。
+ * 标题里的 [ ] | # 和换行会破坏 wikilink 语法（macOS 文件名允许这些字符），
+ * 所以插入前先消毒。
+ */
+function insertWikilink(title) {
+  const ta = el.markdown;
+  const safe = String(title || '')
+    .replace(/\[/g, '［')
+    .replace(/\]/g, '］')
+    .replace(/\|/g, '｜')
+    .replace(/#/g, '＃')
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+  if (!safe) return;
+  const text = `[[${safe}]]`;
+  const start = typeof ta.selectionStart === 'number' ? ta.selectionStart : ta.value.length;
+  const end = typeof ta.selectionEnd === 'number' ? ta.selectionEnd : start;
+  ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+  const pos = start + text.length;
+  ta.focus();
+  ta.setSelectionRange(pos, pos);
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  el.wikilinkPop.hidden = true;
 }
 
 /** 预填上次用过的标签（少打几个字） */
@@ -742,6 +889,17 @@ function bindEvents() {
       addNewFolder();
     }
   });
+
+  // v0.7.0
+  if (el.btnDisableAuto) {
+    el.btnDisableAuto.addEventListener('click', disableAutoArchiveForThisSite);
+  }
+  if (el.btnWikilink) {
+    el.btnWikilink.addEventListener('click', toggleWikilink);
+  }
+  if (el.wikilinkSearch) {
+    el.wikilinkSearch.addEventListener('input', () => renderWikilinkList(el.wikilinkSearch.value));
+  }
 
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {

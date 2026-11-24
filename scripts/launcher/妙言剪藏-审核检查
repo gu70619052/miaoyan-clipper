@@ -1,0 +1,4 @@
+#!/bin/sh
+# 妙言剪藏 · 审核结果检查的启动壳
+# 让 launchd 在「登录项 / 后台项目」里显示这个名字，而不是笼统的 node
+/opt/homebrew/bin/node "$HOME/.dsh/workflows/miaoyan-cws/review-check.mjs" "$@"

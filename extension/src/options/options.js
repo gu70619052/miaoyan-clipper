@@ -13,6 +13,7 @@ import { getSettings, setSettings } from '../lib/settings.js';
 import { listFolders } from '../lib/writer.js';
 import { readFolderTree, cacheFolderTree, clearFolderTree } from '../lib/foldercache.js';
 import { getGrantedOrigins, removeOriginPermissions } from '../lib/permissions.js';
+import { newRuleId } from '../lib/autofolder.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -169,6 +170,7 @@ async function loadSettings() {
   $('opt-keep-remote').checked = !!s.keepRemoteImageOnFail;
   $('opt-allow-private').checked = !!s.allowPrivateImages;
   $('opt-remember-tags').checked = s.rememberTags !== false;
+  $('opt-use-defuddle').checked = s.useDefuddle !== false;
   await loadFolders();
   const sel = $('select-default');
   if (s.defaultFolder && [...sel.options].some((o) => o.value === s.defaultFolder)) {
@@ -280,6 +282,108 @@ async function loadOrigins() {
   });
 }
 
+// ---------------------------------------------------------------- 自动归档规则（v0.7.0）
+
+let archiveRules = [];
+let archiveDisabledHosts = [];
+
+function ruleRow(rule) {
+  const row = document.createElement('div');
+  row.className = 'rule-row';
+  row.dataset.id = rule.id || '';
+
+  const pattern = document.createElement('input');
+  pattern.type = 'text';
+  pattern.className = 'rule-pattern';
+  pattern.placeholder = 'example.com';
+  pattern.value = rule.pattern || '';
+
+  const folder = document.createElement('select');
+  folder.className = 'rule-folder';
+  const rootOpt = document.createElement('option');
+  rootOpt.value = '';
+  rootOpt.textContent = '（库根目录）';
+  folder.appendChild(rootOpt);
+  folders.forEach((f) => {
+    const opt = document.createElement('option');
+    opt.value = f.path;
+    opt.textContent = f.path;
+    folder.appendChild(opt);
+  });
+  folder.value = rule.folder || '';
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'btn ghost danger';
+  del.textContent = '删除';
+
+  const commit = async () => {
+    const target = archiveRules.find((r) => (r.id || '') === (rule.id || ''));
+    if (!target) return;
+    target.pattern = pattern.value.trim();
+    target.folder = folder.value;
+    await persist({ archiveRules: archiveRules.map((r) => ({ ...r })) });
+  };
+  pattern.addEventListener('change', commit);
+  folder.addEventListener('change', commit);
+  del.addEventListener('click', async () => {
+    archiveRules = archiveRules.filter((r) => (r.id || '') !== (rule.id || ''));
+    await persist({ archiveRules: archiveRules.map((r) => ({ ...r })) });
+    renderRules();
+  });
+
+  row.appendChild(pattern);
+  row.appendChild(folder);
+  row.appendChild(del);
+  return row;
+}
+
+function renderRules() {
+  const list = $('rule-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!archiveRules.length) {
+    const p = document.createElement('p');
+    p.className = 'muted tiny';
+    p.textContent = '还没有规则。点右上角「添加规则」开始。';
+    list.appendChild(p);
+    return;
+  }
+  archiveRules.forEach((r) => list.appendChild(ruleRow(r)));
+}
+
+function renderDisabledHosts() {
+  const list = $('disabled-host-list');
+  const summary = $('disabled-summary');
+  if (!list || !summary) return;
+  list.innerHTML = '';
+  if (!archiveDisabledHosts.length) {
+    summary.textContent = '没有被排除的网站';
+    const li = document.createElement('li');
+    li.textContent = '在剪藏面板里点「此站点不再自动归档」，可以把这个网站加进排除名单。';
+    list.appendChild(li);
+    return;
+  }
+  summary.textContent = `已排除 ${archiveDisabledHosts.length} 个网站`;
+  archiveDisabledHosts.forEach((h) => {
+    const li = document.createElement('li');
+    li.textContent = h;
+    list.appendChild(li);
+  });
+}
+
+async function loadArchiveConfig() {
+  const s = await getSettings();
+  archiveRules = Array.isArray(s.archiveRules) ? s.archiveRules : [];
+  archiveDisabledHosts = Array.isArray(s.archiveDisabledHosts) ? s.archiveDisabledHosts : [];
+  const sw = $('opt-auto-archive');
+  if (sw) sw.checked = s.autoArchive === true;
+  const area = $('rule-area');
+  if (area) area.hidden = s.autoArchive !== true;
+  renderRules();
+  renderDisabledHosts();
+}
+
 function bind() {
   $('btn-pick').addEventListener('click', pickRoot);
   $('btn-regrant').addEventListener('click', regrant);
@@ -333,6 +437,7 @@ function bind() {
     ['opt-keep-remote', 'keepRemoteImageOnFail'],
     ['opt-allow-private', 'allowPrivateImages'],
     ['opt-remember-tags', 'rememberTags'],
+    ['opt-use-defuddle', 'useDefuddle'],
   ];
   toggles.forEach(([id, key]) => {
     $(id).addEventListener('change', (ev) => {
@@ -340,6 +445,34 @@ function bind() {
       toast('已保存');
     });
   });
+
+  // v0.7.0：按域名自动归档
+  const swAuto = $('opt-auto-archive');
+  if (swAuto) {
+    swAuto.addEventListener('change', async (ev) => {
+      await persist({ autoArchive: ev.target.checked });
+      const area = $('rule-area');
+      if (area) area.hidden = !ev.target.checked;
+      toast(ev.target.checked ? '已启用按域名自动归档' : '已关闭按域名自动归档');
+    });
+  }
+  const btnAddRule = $('btn-add-rule');
+  if (btnAddRule) {
+    btnAddRule.addEventListener('click', async () => {
+      archiveRules = archiveRules.concat([{ id: newRuleId(), pattern: '', folder: '', enabled: true }]);
+      await persist({ archiveRules: archiveRules.map((r) => ({ ...r })) });
+      renderRules();
+    });
+  }
+  const btnClearDisabled = $('btn-clear-disabled');
+  if (btnClearDisabled) {
+    btnClearDisabled.addEventListener('click', async () => {
+      await persist({ archiveDisabledHosts: [] });
+      archiveDisabledHosts = [];
+      renderDisabledHosts();
+      toast('已清空排除名单');
+    });
+  }
 }
 
 (async function init() {
@@ -347,6 +480,7 @@ function bind() {
   await refreshRoot();
   await loadSettings();
   await loadOrigins();
+  await loadArchiveConfig();
   // 目录列表稍后刷新（枚举 iCloud 目录可能要一两秒，别让整页等它）
   loadFolders().catch(() => {});
 })();

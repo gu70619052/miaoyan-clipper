@@ -103,7 +103,43 @@
               <input type="checkbox" id="opt-remember-tags" />
               <span class="track"></span><span>记住上次用的标签并预填</span>
             </label>
+            <label class="switch">
+              <input type="checkbox" id="opt-use-defuddle" />
+              <span class="track"></span><span>用 Defuddle 识别正文（更准；个别站点认错时可关掉）</span>
+            </label>
           </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>按域名自动归档</h2>
+        <p class="muted">
+          给常用网站各配一个目录：剪藏这些网站时自动选中该目录，不用每次手动挑。
+          <b>默认关闭</b>，打开总开关后才生效；面板里仍然可以临时改成别的目录。
+        </p>
+        <div class="field">
+          <label class="switch">
+            <input type="checkbox" id="opt-auto-archive" />
+            <span class="track"></span><span>启用按域名自动归档</span>
+          </label>
+        </div>
+        <div id="rule-area" hidden>
+          <div class="path-row">
+            <span class="muted tiny">规则（从上到下，第一条命中的生效）</span>
+            <span class="grow"></span>
+            <button id="btn-add-rule" class="btn ghost">添加规则</button>
+          </div>
+          <div id="rule-list" class="rule-list"></div>
+          <p class="muted tiny">
+            域名写 <code>example.com</code> 时，<code>example.com</code> 与它的所有子域（<code>www.example.com</code> 等）都会命中；
+            写 <code>*.example.com</code> 与写 <code>example.com</code> 等价。目标目录从你现有的分类里选。
+          </p>
+          <div class="path-row">
+            <span id="disabled-summary" class="muted tiny">没有被排除的网站</span>
+            <span class="grow"></span>
+            <button id="btn-clear-disabled" class="btn ghost danger">清空排除名单</button>
+          </div>
+          <ul id="disabled-host-list" class="guide tiny"></ul>
         </div>
       </section>
 

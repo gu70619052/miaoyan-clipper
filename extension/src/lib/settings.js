@@ -14,6 +14,11 @@ export const DEFAULT_SETTINGS = {
   keepRemoteImageOnFail: true, // 图片下载失败时退回远程链接
   allowPrivateImages: false,   // 是否允许下载内网/环回地址的图片（默认拒绝，防 SSRF）
   rememberTags: true,         // 是否记住上次用的标签并预填
+  // v0.7.0
+  useDefuddle: true,          // 用 Defuddle 认正文（失败自动回退到自研提取器）
+  autoArchive: false,         // 按域名自动归档（默认关闭，关掉时行为和 v0.6.0 完全一致）
+  archiveRules: [],           // [{id, pattern, folder, enabled}]
+  archiveDisabledHosts: [],   // 「此站点不再自动归档」的域名名单
 };
 
 export async function getSettings() {

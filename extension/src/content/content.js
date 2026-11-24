@@ -709,8 +709,21 @@
   }
 
   /** 全文剪藏：先识别，再把范围框摆到页面上让用户确认/微调 */
-  function startArticleAdjust() {
-    const el = window.MiaoYanExtractor.findArticle();
+  async function startArticleAdjust() {
+    // v0.7.0：优先用 Defuddle 认正文，认不出再回退自研提取器。
+    // 设置里可以关掉 Defuddle（有些站点它反而挑错容器）。
+    // 这里只认「明确设为 false」，其余一律按默认（开）走 —— 与设置页、
+    // extractor.js、settings.js 的默认值保持一致。
+    let useDefuddle = true;
+    try {
+      const st = await chrome.storage.local.get('settings');
+      const settings = (st && st.settings) || {};
+      if (settings && settings.useDefuddle === false) useDefuddle = false;
+    } catch (err) {
+      /* 读不到设置就按默认走 */
+    }
+    const plan = window.MiaoYanExtractor.planArticle({ useDefuddle });
+    const el = plan && plan.element;
     if (!el) {
       showHint('没能识别出正文内容');
       return;
@@ -733,6 +746,11 @@
     state.frame = {
       element: el,
       adjusted: false,
+      // 用户没微调范围时，就用 Defuddle 清洗好的内容（比自研清洗更干净）
+      defuddle: (plan && plan.defuddle) || null,
+      engine: (plan && plan.engine) || 'legacy',
+      // 正文来源与框的位置分开：engine 说框在哪，contentFrom 说正文从哪来
+      contentFrom: (plan && plan.contentFrom) || 'legacy',
       box: {
         x: r.left + window.scrollX,
         y: r.top + window.scrollY,
@@ -761,8 +779,30 @@
     } else {
       target = frame.element;
     }
-    const clean = window.MiaoYanExtractor.cleanArticle(target);
-    const { markdown, images } = window.MiaoYanConverter.convert(clean, { base: document.baseURI });
+    let markdown = '';
+    let images = [];
+    const df = frame.defuddle;
+    state.lastDefuddle = df || null;
+    // 用户没有微调范围、而且正文来自 Defuddle：
+    // 直接用它清洗好的 HTML（标题层级、脚注、代码块都标准化过）。
+    // contentFrom 与 engine 分开：Defuddle 的选择器是在克隆文档上算的，
+    // 在真实文档里偶尔定位不到元素（动态页面），这时它的正文仍然是好的，
+    // 不该因为框没画准就把整篇正文丢掉。
+    // 反过来，如果是我们主动换用了自研容器（Defuddle 退回整页），
+    // 正文必须跟着换，否则框和内容对不上。
+    if (!frame.adjusted && df && frame.contentFrom === 'defuddle') {
+      const out = window.MiaoYanExtractor.markdownFromDefuddle(df, document.baseURI, target);
+      if (out && out.markdown && out.markdown.trim()) {
+        markdown = out.markdown;
+        images = out.images || [];
+      }
+    }
+    if (!markdown) {
+      const clean = window.MiaoYanExtractor.cleanArticle(target);
+      const res = window.MiaoYanConverter.convert(clean, { base: document.baseURI });
+      markdown = res.markdown;
+      images = res.images || [];
+    }
     if (!markdown.trim()) {
       const L = state.layers.frame;
       if (L) L.info.textContent = '这块范围里没有可剪藏的文字，拖大一点';
@@ -946,7 +986,11 @@
   // ---------------------------------------------------------------- 草稿与保存
 
   function buildDraft(partial) {
-    const meta = window.MiaoYanExtractor.pageMeta();
+    // v0.7.0：Defuddle 读到的元信息可以补上我们没读到的字段（描述、语言等）
+    const meta = window.MiaoYanExtractor.mergeMeta(
+      window.MiaoYanExtractor.pageMeta(),
+      state.lastDefuddle || null,
+    );
     const draft = {
       kind: partial.kind || 'text',
       title: partial.title || meta.title || '未命名剪藏',
@@ -1079,6 +1123,36 @@
         note.textContent = '';
         note.style.display = 'none';
       }
+    }
+
+    // v0.7.0：按域名自动归档。
+    // 规则匹配放在后台（内容脚本是普通脚本，不能 import 模块），
+    // 这里只负责把算出来的目录套到下拉框上，并提示用户。
+    try {
+      const auto = await sendMessage({ type: 'MYCLIP_AUTO_FOLDER', url: location.href });
+      if (auto && auto.ok && auto.matched) {
+        // folder 为空串表示「库根目录」（设置页下拉框的第一项），也是有效目标
+        const isRoot = auto.folder === '';
+        if (isRoot || folders.some((f) => f.path === auto.folder)) {
+          sel.value = auto.folder;
+          if (note) {
+            note.textContent = isRoot
+              ? `已按域名规则「${auto.pattern}」归档到「（库根目录）」`
+              : `已按域名规则「${auto.pattern}」归档到「${auto.folder}」`;
+            note.style.display = 'block';
+          }
+        } else if (auto.missing) {
+          // 规则指向的目录没了：必须把下拉框清空，
+          // 否则还会停在 lastFolder/defaultFolder（可能是另一个目录），存错地方。
+          sel.value = '';
+          if (note) {
+            note.textContent = `规则「${auto.pattern}」指向的目录已经不存在，已退回库根目录`;
+            note.style.display = 'block';
+          }
+        }
+      }
+    } catch (err) {
+      /* 问不到就按原来的目录走 */
     }
     return folders;
   }
