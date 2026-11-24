@@ -136,8 +136,20 @@ async function fetchStatus(token, cfg) {
 function printStatus(body) {
   const pub = body.publishedItemRevisionStatus || {};
   const sub = body.submittedItemRevisionStatus || {};
-  console.log(`  已发布版本状态：${pub.state || '—'}${pub.distributionChannels ? `（${pub.distributionChannels.join(', ')}）` : ''}`);
-  if (sub.state) console.log(`  提交版本状态：${sub.state}`);
+  // distributionChannels 是对象数组（每项含 deployPercentage / crxVersion），不是字符串数组
+  const channels = Array.isArray(pub.distributionChannels)
+    ? pub.distributionChannels
+        .map((c) => (c && (c.crxVersion || c.deployPercentage)) ? `${c.crxVersion || ''}${c.deployPercentage ? ` @${c.deployPercentage}%` : ''}`.trim() : String(c))
+        .filter(Boolean)
+        .join(', ')
+    : '';
+  console.log(`  已发布版本状态：${pub.state || '—'}${channels ? `（${channels}）` : ''}`);
+  if (sub.state) {
+    const subChannels = Array.isArray(sub.distributionChannels)
+      ? sub.distributionChannels.map((c) => (c && c.crxVersion) || String(c)).filter(Boolean).join(', ')
+      : '';
+    console.log(`  提交版本状态：${sub.state}${subChannels ? `（${subChannels}）` : ''}`);
+  }
   if (body.lastAsyncUploadError) console.log(`  上次上传错误：${JSON.stringify(body.lastAsyncUploadError)}`);
   const raw = JSON.stringify(body);
   if (raw.length < 600) console.log(`  原始返回：${raw}`);

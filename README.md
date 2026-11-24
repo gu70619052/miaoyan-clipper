@@ -13,8 +13,8 @@
 | 完整审计（7 个子 agent） | `output/miaoyan-clipper/test/audit/`：186 条用例矩阵 + 4 份专项报告 + 独立复核，**汇总见 `audit/SUMMARY.md`** ✅ |
 | 界面截图 | `output/miaoyan-clipper/test/screenshots/`（7 张，含 `06-全文范围框.png`、`07-无语义类名-默认框.png`）✅ |
 | 真实妙言库写入 | ⚠️ 需你手动授权一次目录（自动化测试用 OPFS 根句柄替代，代码路径完全相同） |
-| Chrome 应用商店上架 | 🟡 **v0.7.0 待提交审核**（`node scripts/cws.mjs release` 已可一条命令完成）；线上现行版本 v0.6.0：<https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>；审核结果由 launchd 每 2 小时检查并通过 QQ 通知（见第九节） |
-| GitHub 仓库（源码 + 隐私政策托管） | ✅ <https://github.com/gu70619052/miaoyan-clipper>（公开仓库，Pages 已 built；含 `extension/` 源码、`scripts/` 自动发版与审核监控、`store/` 上架文案、`test/` 监控脚本测试） |
+| Chrome 应用商店上架 | 🟡 **v0.7.0 已提交审核**（2026-11-24，`node scripts/cws.mjs release` 已上传并提交，状态 PENDING_REVIEW）；线上现行版本 v0.6.0：<https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>；审核结果由 launchd 每 2 小时检查并通过 QQ 通知（见第九节） |
+| GitHub 仓库（源码 + 隐私政策托管） | ✅ <https://github.com/gu70619052/miaoyan-clipper>（公开仓库，Pages 已 built；含 `extension/` 源码、`scripts/` 自动发版与审核监控、`store/` 上架文案、`test/` 监控脚本测试）；Release v0.7.0：<https://github.com/gu70619052/miaoyan-clipper/releases/tag/v0.7.0> |
 | 版本 | v0.7.0（正文识别换 Defuddle + 数学公式保真 + 按域名自动归档 + 双链插入）；上一版 v0.6.0 已上线 |
 
 ---
@@ -806,12 +806,15 @@ Defuddle 选出来的元素在真实 DOM 里偶尔定位不到时，框会退回
 ## 十、后续可做（未做，等你决定）
 
 **v0.6.0 已上架并通过审核**（2026-11-24）→ <https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>
+**v0.7.0 已提交审核**（2026-11-24，`PENDING_REVIEW`）→ 出结果会自动 QQ 通知你。
 下面这段保留作为「下一次改动要做的事」的清单：
 
 1. ~~把 `output/miaoyan-clipper/store/privacy.html` 托管到公开地址~~ ✅ 已完成：<https://gu70619052.github.io/miaoyan-clipper/>，商店后台填的就是这个地址
 2. ~~按 `store/listing.md` 打包 zip~~ ✅ 已完成：`output/miaoyan-clipper-0.7.0-store.zip`（37 文件 226 KB），挂到 Release v0.7.0
 3. ~~上传商店后台素材与文案~~ ✅ 已完成并过审（v0.6.0，2026-11-24）
-4. **仍待人工做一次**：点一次扩展图标，验证「截图剪藏」这条 activeTab 路径（自动化跑不了，见 8e.4）
+4. **v0.7.0 仍待人工做一件事**：商店后台的「详细说明 / 版本说明」无法用 API 改（Chrome Web Store API 没有改 listing 的接口），
+   要把 `output/miaoyan-clipper/store/listing.md` 里的 v0.7.0 文案手动粘进去；不改也能过审，只是商店页文案还是 0.6.0 那版。
+5. **仍待人工做一次**：点一次扩展图标，验证「截图剪藏」这条 activeTab 路径（自动化跑不了，见 8e.4）
 
 **以后怎么发新版（已经接好，见 `output/miaoyan-clipper/store/publish-api.md`）**
 

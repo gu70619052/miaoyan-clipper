@@ -1,6 +1,13 @@
 # 上架 Chrome 应用商店 · 逐项操作清单
 
-> **状态更新（2026-11-24）：v0.6.0 已审核通过并上线** → 商店页 <https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>
+> **状态更新（2026-11-24）：v0.6.0 已审核通过并上线；v0.7.0 已提交审核（PENDING_REVIEW）** → 商店页 <https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>
+>
+> v0.7.0 用一条命令完成的上传与提交：`node scripts/cws.mjs release`（自动打包 → 上传 → 提交审核 → 查状态）。
+> 审核结果由 launchd 每 2 小时查一次，**只在出结果时发一条 QQ**，平时静默。
+>
+> **v0.7.0 还剩一件人工事**：Chrome Web Store API **没有修改商店文案的接口**，
+> 所以「详细说明 / 版本说明」要在后台手动粘一次（新文案在 `store/listing.md` 第 2 节与第 7 节）。
+> 不改也能过审，只是商店页文案还是 0.6.0 那版。
 >
 > 这份清单保留下来有两个用处：① 记录首版是怎么过的审；② **以后再发新版本不用重走这一遍**——
 > 直接用 `scripts/cws.mjs release` 自动上传并发布（见 `store/publish-api.md`），
@@ -16,9 +23,9 @@
 | --- | --- | --- |
 | 1 | 注册 Chrome 商店开发者账号 | ✅ 已完成（你付了注册费，账号 `gu70619052`） |
 | 2 | 隐私政策托管到公网 | ✅ **已完成并验证可访问（HTTP 200）**：<https://gu70619052.github.io/miaoyan-clipper/> （GitHub Pages，仓库 <https://github.com/gu70619052/miaoyan-clipper>） |
-| 3 | 扩展包 | ✅ **已打包并上架**：`../miaoyan-clipper-0.6.0-store.zip`（33 文件，118 KB，`manifest.json` 在根目录）；同时传到了 GitHub Release：<https://github.com/gu70619052/miaoyan-clipper/releases/tag/v0.6.0> |
+| 3 | 扩展包 | ✅ **已打包并上架**：`../miaoyan-clipper-0.7.0-store.zip`（37 文件，226 KB，`manifest.json` 在根目录）；v0.6.0 的包挂在 Release <https://github.com/gu70619052/miaoyan-clipper/releases/tag/v0.6.0>，v0.7.0 的包挂在 <https://github.com/gu70619052/miaoyan-clipper/releases/tag/v0.7.0> |
 | 4 | 图标 / 宣传图 / 详情页截图 | ✅ **已做好并已提交**：`store/icon-128.png`、`store/promo-440x280.png`、`store/promo-920x680.png`、`store/shot-1..5-1280x800.png` |
-| 5 | 文案（名称、简介、详细说明、权限理由、数据声明、版本说明） | ✅ **已填并已过审**：见下面第 3 节，原始稿在 `store/listing.md` |
+| 5 | 文案（名称、简介、详细说明、权限理由、数据声明、版本说明） | ✅ **已填并已过审**（v0.6.0）；🟡 v0.7.0 的详细说明/版本说明待手动粘贴（见 `store/listing.md`） |
 
 ---
 
