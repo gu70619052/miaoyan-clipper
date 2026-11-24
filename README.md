@@ -13,7 +13,7 @@
 | 完整审计（7 个子 agent） | `output/miaoyan-clipper/test/audit/`：186 条用例矩阵 + 4 份专项报告 + 独立复核，**汇总见 `audit/SUMMARY.md`** ✅ |
 | 界面截图 | `output/miaoyan-clipper/test/screenshots/`（7 张，含 `06-全文范围框.png`、`07-无语义类名-默认框.png`）✅ |
 | 真实妙言库写入 | ⚠️ 需你手动授权一次目录（自动化测试用 OPFS 根句柄替代，代码路径完全相同） |
-| Chrome 应用商店上架 | 🟡 **只差你在商店后台点几下**：素材与文案已备好（`output/miaoyan-clipper/store/`）；隐私政策已托管上线并验证可访问 → <https://gu70619052.github.io/miaoyan-clipper/>；扩展源码与上架包已公开到 GitHub <https://github.com/gu70619052/miaoyan-clipper>（Release v0.6.0 附上架 zip）；**待你做**：付 5 美元开发者注册费 → 建商品 → 照抄 `store/submit-checklist.md` 里的文案 → 提交审核 |
+| Chrome 应用商店上架 | ✅ **v0.6.0 已审核通过并上线**：商店页 <https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>；审核结果由 launchd 定时检查并通过 QQ 通知（见第九节） |
 | GitHub 仓库（源码 + 隐私政策托管） | ✅ <https://github.com/gu70619052/miaoyan-clipper>（公开仓库，29 个文件，Pages 已 built） |
 | 版本 | v0.6.0（权限最小化：安装不申请主机权限，按需注入 + 跨站图片按站点授权） |
 
@@ -46,6 +46,7 @@
 | 源码仓库（公开） | <https://github.com/gu70619052/miaoyan-clipper> |
 | 隐私政策（商店填这个） | <https://gu70619052.github.io/miaoyan-clipper/> |
 | 上架包下载（Release） | <https://github.com/gu70619052/miaoyan-clipper/releases/tag/v0.6.0> |
+| 商店安装（已上架） | <https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj> |
 
 ---
 
@@ -199,7 +200,7 @@ title: "测试：标题/带:非法字符"
 3. **整篇正文识别是启发式打分**（v0.3.1 起按段落权重 + 类名语义 + 主标题锚点，见八b），多栏排版、无限滚动、整站 SPA 这类复杂页面仍可能抓偏；抓偏时可以直接**拖范围框**修正，或改用「框选剪藏」兜底。识别质量只在 5 个自建测试页上验证过，真实站点未逐一手测。
 4. **图片下载受目标站限制**：需要登录或 Referer 校验的图会下载失败，此时按设置退回远程链接（正文保留原始图片地址）。
 5. **依赖 Chrome 116+**，未做 Firefox / Safari 兼容。
-6. **尚未提交应用商店**（物料已备好，见 `output/miaoyan-clipper/store/`），目前只支持本地加载。
+6. **已上架 Chrome 应用商店**（v0.6.0 已审核通过并上线）：<https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>；源码与上架物料仍在 `output/miaoyan-clipper/store/`，后续版本可用 `scripts/cws.mjs` 自动发版。
 7. 扩展不参与 iCloud 同步冲突处理——库在 iCloud 时，文件冲突交给 MiaoYan 与系统同步处理。
 8. **iCloud 目录的上下文差异**（v0.2.0 已处理）：后台 Service Worker 里可能读不到 iCloud 目录句柄/子目录，
    现已改为扩展页上下文枚举 + 写盘，并加了目录缓存；若某次仍异常，去设置页点「刷新目录列表」→「运行诊断」，把报告发回来即可定位。
@@ -623,12 +624,21 @@ P0 修复、P1 修复、上架物料（隐私政策 URL、权限理由、截图�
 
 ## 十、后续可做（未做，等你决定）
 
-**上架前只剩这几步（都归你操作）**
+**v0.6.0 已上架并通过审核**（2026-11-24）→ <https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>
+下面这段保留作为「下一次改动要做的事」的清单：
 
-1. 把 `output/miaoyan-clipper/store/privacy.html` 托管到一个公开地址（GitHub Pages 最省事），填进商店后台的隐私政策 URL
-2. 按 `store/listing.md` 打包 zip：`cd output/miaoyan-clipper && zip -r ../miaoyan-clipper-0.5.0-store.zip manifest.json README.md PRIVACY.md icons src -x 'icons/make_icons.py'`
-3. 上传商店后台：图标 128、小宣传图 440×280、5 张 1280×800 详情页截图、详细说明、逐条权限理由、数据使用声明（**网站内容 / 浏览活动 / 用户活动 三项勾上，其余六项不勾；第二组「有限使用认证」全勾**——见 `store/submit-checklist.md` §3.5）、版本说明
-4. 人工点一次扩展图标，验证「截图剪藏」这条 activeTab 路径（自动化跑不了，见 8e.4）
+1. ~~把 `output/miaoyan-clipper/store/privacy.html` 托管到公开地址~~ ✅ 已完成：<https://gu70619052.github.io/miaoyan-clipper/>，商店后台填的就是这个地址
+2. ~~按 `store/listing.md` 打包 zip~~ ✅ 已完成：`output/miaoyan-clipper-0.6.0-store.zip`（33 文件 118 KB），已挂到 Release v0.6.0
+3. ~~上传商店后台素材与文案~~ ✅ 已完成并过审
+4. **仍待人工做一次**：点一次扩展图标，验证「截图剪藏」这条 activeTab 路径（自动化跑不了，见 8e.4）
+
+**以后怎么发新版（已经接好，见 `output/miaoyan-clipper/store/publish-api.md`）**
+
+- 一次性：Cloud Console 建服务账号 → 开发者中心「账号」页加它的 email → `scripts/import-sa-key.sh` 把 JSON 密钥存进钥匙串 → 填 `scripts/cws.config.json` 的 `publisherId`/`itemId`（**已完成**）
+- 每次：改 `manifest.json` 的 version → `node scripts/cws.mjs release`（打包 + 上传 + 提交审核 + 查状态）
+- 只读：`node scripts/cws.mjs status`；撤回：`cancel`
+- 审核结果自动提醒（已装好）：launchd 每 30 分钟查一次，**只在出结果时发一条 QQ**，平时静默；脚本 `~/.dsh/workflows/miaoyan-cws/review-check.mjs`，见 `store/publish-api.md` §十一
+- 不可自动化：首次建商品、跳过审核、不升版本号发版；另需账号开 2FA
 
 **功能侧可选**
 

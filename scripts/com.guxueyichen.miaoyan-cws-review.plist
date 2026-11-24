@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.guxueyichen.miaoyan-cws-review</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/guxueyichen/.dsh/workflows/miaoyan-cws/bin/妙言剪藏-审核检查</string>
+  </array>
+
+  <!-- 每 30 分钟查一次；登录后先跑一次 -->
+  <key>StartInterval</key>
+  <integer>1800</integer>
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- security / node 都需要 PATH -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/guxueyichen</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/guxueyichen/.dsh/logs/miaoyan-cws-review.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/guxueyichen/.dsh/logs/miaoyan-cws-review.log</string>
+
+  <!-- 跑失败不要疯狂重启 -->
+  <key>ThrottleInterval</key>
+  <integer>600</integer>
+</dict>
+</plist>

@@ -244,6 +244,18 @@ node shots.mjs    # 重新生成界面截图
 
 
 
+## 自动发版（可选，给维护者）
+
+```bash
+./scripts/import-sa-key.sh ~/Downloads/<服务账号密钥>.json   # 一次性：密钥进钥匙串，删掉明文
+cp scripts/cws.config.example.json scripts/cws.config.json  # 填 publisherId / itemId
+node scripts/cws.mjs token                                  # 验证凭据
+node scripts/cws.mjs release                                # 改完 version 后：打包+上传+提交审核
+node scripts/cws.mjs status                                 # 查审核状态
+```
+
+细节与报错对照见 `store/publish-api.md`。**密钥只进钥匙串**，仓库里不会有任何凭据文件。
+
 ## 致谢与许可
 
 - **本扩展是第三方开发者独立开发的非官方插件**，与妙言（MiaoYan）App 及其作者 tw93 无隶属、授权或合作关系。
@@ -264,6 +276,6 @@ node shots.mjs    # 重新生成界面截图
 - 需要登录或有 Referer 校验的图片可能下载失败，可设置退回远程链接
 - v0.6.0 起安装时不申请主机权限，剪藏依赖用户手势（点图标 / 右键 / 快捷键）授予的 `activeTab`；没有任何手势时，扩展看不到任何网页
 - 跨站图片要按站点授权一次；不授权就保留原始链接（想省事可在 `chrome://extensions` 把网站访问权限改成「在所有网站上」）
-- 仅支持 Chrome 116+；商店上架物料已备好（`store/`），尚未提交
+- 仅支持 Chrome 116+；v0.6.0 已上架 Chrome 应用商店 → <https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>
 - 截图剪藏依赖浏览器授予的 `activeTab`，自动化测试跑不了这条手势路径，需人工点一次扩展图标验证
 - 快捷键最多 3 组（Chrome 限制每扩展 4 个建议键），且 macOS 上部分字母键被浏览器占用，改键位前先跑 `test/probe-shortcuts.mjs`

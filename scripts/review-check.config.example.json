@@ -1,0 +1,7 @@
+{
+  "publisherId": "<你的 Publisher ID>",
+  "itemId": "<扩展 ID>",
+  "displayName": "妙言剪藏",
+  "keychainService": "miaoyan-cws-sa",
+  "qqSend": "/Users/guxueyichen/.dsh/scripts/qq-send"
+}
