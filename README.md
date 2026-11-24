@@ -4,7 +4,7 @@
 
 ---
 
-## 一、当前状态（2026-11-23）
+## 一、当前状态（2026-11-24）
 
 | 项目 | 状态 |
 | --- | --- |
@@ -14,7 +14,7 @@
 | 界面截图 | `output/miaoyan-clipper/test/screenshots/`（7 张，含 `06-全文范围框.png`、`07-无语义类名-默认框.png`）✅ |
 | 真实妙言库写入 | ⚠️ 需你手动授权一次目录（自动化测试用 OPFS 根句柄替代，代码路径完全相同） |
 | Chrome 应用商店上架 | ✅ **v0.6.0 已审核通过并上线**：商店页 <https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>；审核结果由 launchd 定时检查并通过 QQ 通知（见第九节） |
-| GitHub 仓库（源码 + 隐私政策托管） | ✅ <https://github.com/gu70619052/miaoyan-clipper>（公开仓库，29 个文件，Pages 已 built） |
+| GitHub 仓库（源码 + 隐私政策托管） | ✅ <https://github.com/gu70619052/miaoyan-clipper>（公开仓库，42 个文件，Pages 已 built；含 `extension/` 源码、`scripts/` 自动发版与审核监控、`store/` 上架文案、`test/` 监控脚本测试） |
 | 版本 | v0.6.0（权限最小化：安装不申请主机权限，按需注入 + 跨站图片按站点授权） |
 
 ---
@@ -172,6 +172,13 @@ node e2e.mjs         # 或 npm test
 | N | v0.4.0 截图剪藏端到端（无授权时给可读提示、截屏→框选→JPEG 草稿、截图附件写入 `i/`） | 3/3 |
 | O | v0.5.0 交互优化（三个快捷键已注册、点图标发起剪藏出范围框、面板「剪藏当前页面」按钮、保存后浮层自动关闭、提示条带「继续剪藏」、✓ 角标、标签记忆与预填、上一篇文章提示条） | 9/9 |
 | P | v0.6.0 权限最小化（正式包无 `host_permissions`/`content_scripts`、权限工具函数 pattern 归一与同源免申请、设置页权限卡片可撤销） | 3/3 |
+
+另有**审核监控脚本**的独立测试（不联网、不发真 QQ）：
+
+| 文件 | 内容 | 结果 |
+| --- | --- | --- |
+| `output/miaoyan-clipper/test/review-check.test.mjs` | 状态解析、版本号比较、事件生成（上线/被拒/下架/警告）、去重判定、旧指纹迁移 | **33/33** |
+| `output/miaoyan-clipper/test/review-check.e2e.mjs` | 假 API + 假 QQ 的 8 段场景演练：旧状态不重发 → 审核中不打扰 → 新版本上线发一条 → 同状态不发 → 再下一版又发 → 被拒发一次且反复查不重发 → 改好后通过再发 → API 报错连续两次才告警 | **25/25** |
 
 实测产出示例（`title` 键已与既有迁移笔记对齐）：
 
@@ -619,6 +626,64 @@ P0 修复、P1 修复、上架物料（隐私政策 URL、权限理由、截图�
   P1 正式包权限最小、P2 权限工具函数（pattern 归一 / 同源免申请 / 跨站算缺权）、P3 设置页权限卡片可撤销）。
 - **未实测**：真实点图标的 activeTab 授权链路（只能人工验）、用户在权限弹窗点「允许/拒绝」两种走向的真实 UI 反馈
   （自动化里 `chrome.permissions.request` 无弹出时会挂住，已在探针里确认）。
+
+---
+
+## 八j、审核监控加固：从「状态指纹」改成「事件记账」（2026-11-24）
+
+**背景**：v0.6.0 已过审上线，launchd 定时检查按预期在 12:33 发了一条 QQ 通知。
+你的要求：「用于以后每次迭代的上架通知」——所以要确认它**下次发版时还会再发**，而且**只发一次**。
+
+### 8j.1 原方案的真实缺陷
+
+旧版用「提交版本\|提交状态\|已发布版本\|已发布状态」拼一个指纹去重。问题出在商店的 `fetchStatus` 语义上：
+**提交成功后 `submittedItemRevisionStatus` 会被清空**。同一个版本在两次轮询里可能呈现两种指纹——
+
+| 轮次 | API 返回 | 旧指纹 |
+| --- | --- | --- |
+| T1（刚过审） | `submitted=PUBLISHED(0.6.1)`、`published=PUBLISHED(0.6.0)` | `0.6.1\|PUBLISHED\|0.6.0\|PUBLISHED` |
+| T2（半小时后） | `submitted=NONE`、`published=PUBLISHED(0.6.1)` | `?\|NONE\|0.6.1\|PUBLISHED` |
+
+两个指纹不同 → **一次上线会发两条 QQ**。旧版还漏掉了 `STAGED`（过审待发布）、`PUBLISHED_TO_TESTERS`、
+`CANCELLED`，以及 API 顶层两个布尔位 `takenDown`（被下架）、`warned`（政策警告）。
+
+### 8j.2 现在的模型：记「发生过什么事件」，不是「当前状态长什么样」
+
+| 事件 | 事件键 | 什么时候产生 |
+| --- | --- | --- |
+| 上线 | `live\|<版本>` | `PUBLISHED` / `PUBLISHED_TO_TESTERS`；`STAGED` 也算（键与上线一致，之后真正发布不会重复报） |
+| 被拒 | `rejected\|<版本>\|#n` | 该版本被拒；`n` 是第几次被拒，同一次只报一次，改好后通过会再发一条「上线」 |
+| 被下架 | `takenDown\|<版本>` | `takenDown` 刚变 true 的那一轮 |
+| 政策警告 | `warned\|<版本>` | `warned` 刚变 true 的那一轮 |
+
+- 优先级 `takenDown > rejected > warned > live`；同一轮里既有被拒又有警告会发两条（两件事分开说）。
+- 已记账的事件键不重复通知（上限 50 条）；老状态文件里的旧指纹会在加载时自动迁移成事件键
+  （`?|NONE|0.6.0|PUBLISHED` → `live|0.6.0`），**迁移后不会把 v0.6.0 重发一遍**（已实测）。
+- QQ 发成功才记账；发失败不记账也不更新快照，下轮重试，不丢结果。
+
+### 8j.3 顺带修掉的两个隐患
+
+- **fetch 没有超时**：原来 API 挂住会无限等待（演练时真的卡死了）。现在 token 与 fetchStatus 两处都加了
+  `AbortSignal.timeout(20_000)`。
+- **查询失败仍返回 0**：launchd 看不到失败。现在失败时 `process.exitCode = 1`。
+
+### 8j.4 测试
+
+```bash
+cd output/miaoyan-clipper
+node test/review-check.test.mjs   # 33/33 单测
+node test/review-check.e2e.mjs    # 25/25 离线端到端
+```
+
+`e2e` 起一个本地假 API 服务器（按脚本依次返回不同状态）+ 一个假 `qq-send`（把消息写进临时文件），
+跑完 8 段场景：旧状态首跑不重发 → 审核中不打扰 → 新版本上线发一条 → 同状态再跑不发 → 再下一版又发一条 →
+被拒发一条且反复查不重发 → 改好后通过再发一条 → API 报错时连续两次才告警且退出码非 0。
+
+### 8j.5 现在的实际状态
+
+- launchd 任务 `com.guxueyichen.miaoyan-cws-review` 每 30 分钟跑一次，最近一次 `last exit code = 0`。
+- 状态文件 `~/.dsh/state/miaoyan-cws-review.json` 现有 `live|0.6.0`（v0.6.0 已报过，不会再报）。
+- 下次提 v0.6.1 并过审 → 会再发一条「✅ 妙言剪藏 v0.6.1 审核通过，已经上线」。
 
 ---
 
