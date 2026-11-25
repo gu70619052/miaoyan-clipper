@@ -32,6 +32,9 @@ const MENU_ITEMS = [
   { id: 'myclip-selection', title: '妙言剪藏：剪藏选中文字', contexts: ['selection'] },
   { id: 'myclip-article', title: '妙言剪藏：整篇正文', contexts: ['page'] },
   { id: 'myclip-screenshot', title: '妙言剪藏：截图剪藏', contexts: ['page'] },
+  // 很多人找不到设置入口（扩展图标的右键菜单是 Chrome 自带的，不受我们控制），
+  // 所以在页面右键菜单里也放一个。
+  { id: 'myclip-settings', title: '妙言剪藏：设置…', contexts: ['page'] },
 ];
 
 const MENU_MODE = {
@@ -93,10 +96,33 @@ function notifyUnsupportedPage(tabId, url) {
   }
 }
 
+/**
+ * 给侧栏递一句话（状态条）。
+ *
+ * 为什么需要它：以前剪藏失败只有一个 6 秒的角标，用户基本看不见，
+ * 于是「点图标没反应」变成了最常见的反馈。现在失败/进行中都会写进会话存储，
+ * 侧栏打开时直接显示原因。
+ */
+function setPanelNotice(text, kind = 'info') {
+  if (!text) return;
+  chrome.storage.session
+    .set({ panelNotice: { text: String(text), kind, at: Date.now() } })
+    .catch(() => {});
+}
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'myclip-settings') {
+    chrome.runtime.openOptionsPage();
+    return;
+  }
   const mode = MENU_MODE[info.menuItemId];
   if (!mode || !tab || tab.id == null) return;
-  startClipOnTab(tab, mode).catch(() => {});
+  startClipOnTab(tab, mode)
+    .then((res) => {
+      if (res && res.ok) return;
+      setPanelNotice((res && res.error) || '剪藏失败', 'err');
+    })
+    .catch(() => {});
 });
 
 /** 把内容脚本注入到指定标签页（内容脚本内部有幂等守卫，重复注入不会重复绑定） */
@@ -145,8 +171,25 @@ async function startClipOnTab(tab, mode) {
 }
 
 // 点地址栏旁的扩展图标 = 发起剪藏（默认整篇正文，页面上还能拖范围框调整）
+//
+// 关键：剪藏的同时**把侧栏也打开**。
+// 以前只有页面上那个不太显眼的范围框，用户很容易以为「点了没反应」——
+// 尤其是刚装好、还没授权目录的时候。侧栏一打开，用户立刻看到：
+// 未授权 → 「先授权妙言笔记库」；已授权 → 草稿卡片和「保存到妙言」按钮。
 chrome.action.onClicked.addListener((tab) => {
-  startClipOnTab(tab, 'article').catch(() => {});
+  // 先开侧栏，再去识别正文：
+  // chrome.sidePanel.open() 要求「此刻」还有用户手势，而识别正文要先注入
+  // 内容脚本、跑一遍 Defuddle，await 之后手势就过期了 → 点了图标什么反应都没有。
+  // 侧栏先开出来（显示「正在识别正文…」），草稿识别完会自动填进来。
+  setPanelNotice('正在识别正文…', 'info');
+  openPanel(tab && tab.id);
+  startClipOnTab(tab, 'article')
+    .then((res) => {
+      if (!res || !res.ok) {
+        setPanelNotice((res && res.error) || '剪藏失败', 'err');
+      }
+    })
+    .catch(() => {});
 });
 
 const MODE_BY_COMMAND = {
@@ -155,14 +198,21 @@ const MODE_BY_COMMAND = {
   'clip-screenshot': 'screenshot',
 };
 
-// 快捷键：Ctrl/Cmd + Shift + S / A / E
+// 快捷键：Ctrl/Cmd + Shift + S / K / P
 chrome.commands.onCommand.addListener((command) => {
   const mode = MODE_BY_COMMAND[command] || 'article';
   chrome.tabs
     .query({ active: true, currentWindow: true })
     .then((tabs) => {
       const tab = tabs && tabs[0];
-      startClipOnTab(tab, mode).catch(() => {});
+      setPanelNotice('正在识别正文…', 'info');
+      // 同上：先开侧栏，抓住用户手势
+      openPanel(tab && tab.id);
+      startClipOnTab(tab, mode)
+        .then((res) => {
+          if (!res || !res.ok) setPanelNotice((res && res.error) || '剪藏失败', 'err');
+        })
+        .catch(() => {});
     })
     .catch(() => {});
 });

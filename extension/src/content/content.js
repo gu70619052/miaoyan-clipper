@@ -763,6 +763,9 @@
     state.layers = state.layers || {};
     state.layers.frame = L;
     renderFrame();
+    // 说清楚下一步做什么：以前整篇剪藏只有一个不显眼的范围框，
+    // 新手会以为「点了图标没反应」。
+    showHint('<span>已识别正文，拖动边框可微调范围</span><kbd>Esc</kbd><span>取消</span>');
     window.addEventListener('scroll', onFrameScroll, { passive: true });
     window.addEventListener('resize', onFrameScroll);
     window.addEventListener('keydown', onFrameKey, true);

@@ -9,13 +9,13 @@
 | 项目 | 状态 |
 | --- | --- |
 | 扩展源码（可加载） | `output/miaoyan-clipper/` ✅ |
-| 端到端测试 | `output/miaoyan-clipper/test/e2e.mjs`，**108/108 断言通过** ✅ |
+| 端到端测试 | `output/miaoyan-clipper/test/e2e.mjs`，**113/113 断言通过** ✅ |
 | 完整审计（7 个子 agent） | `output/miaoyan-clipper/test/audit/`：186 条用例矩阵 + 4 份专项报告 + 独立复核，**汇总见 `audit/SUMMARY.md`** ✅ |
 | 界面截图 | `output/miaoyan-clipper/test/screenshots/`（7 张，含 `06-全文范围框.png`、`07-无语义类名-默认框.png`）✅ |
 | 真实妙言库写入 | ⚠️ 需你手动授权一次目录（自动化测试用 OPFS 根句柄替代，代码路径完全相同） |
-| Chrome 应用商店上架 | 🟡 **v0.7.0 已提交审核**（2026-11-24，`node scripts/cws.mjs release` 已上传并提交，状态 PENDING_REVIEW）；线上现行版本 v0.6.0：<https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>；审核结果由 launchd 每 2 小时检查并通过 QQ 通知（见第九节） |
-| GitHub 仓库（源码 + 隐私政策托管） | ✅ <https://github.com/gu70619052/miaoyan-clipper>（公开仓库，Pages 已 built；含 `extension/` 源码、`scripts/` 自动发版与审核监控、`store/` 上架文案、`test/` 监控脚本测试）；Release v0.7.0：<https://github.com/gu70619052/miaoyan-clipper/releases/tag/v0.7.0> |
-| 版本 | v0.7.0（正文识别换 Defuddle + 数学公式保真 + 按域名自动归档 + 双链插入）；上一版 v0.6.0 已上线 |
+| Chrome 应用商店上架 | 🟢 **v0.7.0 已过审上线**（2026-11-25 查询 `publishedItemRevisionStatus` = `PUBLISHED`、0.7.0 @ 100%）；**v0.7.1 已打包待提交**（商店同一时间只收一个待审版本，v0.7.0 出结果后即可提交）；商店页：<https://chromewebstore.google.com/detail/妙言剪藏/pbdpebhchbkgmgdgdehnoppglilakiaj>；审核结果由 launchd 每 2 小时检查并通过 QQ 通知（见第九节） |
+| GitHub 仓库（源码 + 隐私政策托管） | ✅ <https://github.com/gu70619052/miaoyan-clipper>（公开仓库，Pages 已 built；含 `extension/` 源码、`scripts/` 自动发版与审核监控、`store/` 上架文案与素材、`test/` 监控脚本测试）；Release：<https://github.com/gu70619052/miaoyan-clipper/releases> |
+| 版本 | **v0.7.1**（首次体验修复：点图标立刻有反应、授权后第一次保存就能存进去）；线上现行 v0.7.0 |
 
 ---
 
@@ -152,7 +152,7 @@ npm install          # 只装 puppeteer-core
 node e2e.mjs         # 或 npm test
 ```
 
-脚本用**本机真实 Chrome** 加载未打包扩展（CDP `Extensions.loadUnpacked`），跑 104 项断言：
+脚本用**本机真实 Chrome** 加载未打包扩展（CDP `Extensions.loadUnpacked`），跑 113 项断言：
 
 | 组 | 内容 | 结果 |
 | --- | --- | --- |
@@ -173,6 +173,7 @@ node e2e.mjs         # 或 npm test
 | O | v0.5.0 交互优化（三个快捷键已注册、点图标发起剪藏出范围框、面板「剪藏当前页面」按钮、保存后浮层自动关闭、提示条带「继续剪藏」、✓ 角标、标签记忆与预填、上一篇文章提示条） | 9/9 |
 | P | v0.6.0 权限最小化（正式包无 `host_permissions`/`content_scripts`、权限工具函数 pattern 归一与同源免申请、设置页权限卡片可撤销） | 3/3 |
 | Q | v0.7.0 新能力（五种数学写法、Defuddle 已加载、`useAsync:false` 且 fetch 零调用、引擎开关两条路径、随机类名页自研兜底、归档规则纯函数、设置页规则表、面板自动归档、插入双链、KaTeX 块级公式、带 `$` 的公式退回代码块、`<` 还原成 `\lt`、库根目录规则有效且裸后缀不劫持全站） | 19/19 |
+| R | v0.7.1 首次体验（授权请求在点击时立刻发起、授权卡引导「一次授权并保存」、后台提示显示在状态条、点图标先开侧栏再识别、识别完给出「下一步」提示） | 5/5 |
 
 **D1 真实站点回归**（A1 的验收环节，见 8k.3）：
 
@@ -800,6 +801,60 @@ Defuddle 选出来的元素在真实 DOM 里偶尔定位不到时，框会退回
 `optional_host_permissions` 仍是两项，**没有新增权限、没有新增对外请求**；
 商店「数据使用声明」与隐私政策的勾选口径不变，只在隐私政策里补了
 「Defuddle 本地打包、异步模式已关闭、有测试断言」这一段（`PRIVACY.md` §三 与 `store/privacy.html`）。
+
+---
+
+## 八l、v0.7.1 首次体验修复：点了有反应，第一次就存得进去（2026-11-25）
+
+用户实测反馈两条：**① 初次安装后点工具栏图标无反应**（实际要去右键进选项授权）；
+**② 授权后第一次保存仍提示需要授权**，再次授权并点「永久允许」后才正常。
+
+### 8l.1 两个根因（读码 + 实测定位）
+
+**根因一：剪藏成功时侧栏不开，失败只有一个 6 秒的角标。**
+`chrome.sidePanel.setPanelBehavior({openPanelOnActionClick:false})` 是 v0.5.0 为了让
+`chrome.action.onClicked` 能触发而关掉的 —— 于是「点图标」既不开侧栏，也只在失败时给个角标。
+更关键的是：点图标后要先 `chrome.scripting.executeScript` 注入内容脚本、再跑一遍 Defuddle 识别正文，
+这些 `await` 之后**用户手势（transient activation）就过期了**，此时再调 `chrome.sidePanel.open()`
+会被 Chrome 拒绝 → 「点了完全没反应」。
+
+**根因二：目录授权请求被排在了用户手势之外。**
+Chrome 的 `FileSystemHandle.requestPermission()` 依赖瞬时用户激活。原来的 `save()` 顺序是
+「读设置 → 申请跨站图片权限（可能弹一次 Chrome 权限框，耗时数秒）→ 才写盘」，
+等轮到目录授权时激活已经过期 → `NotAllowedError` → 被映射成 `needgesture` → 报「需要再点一次」；
+用户再点「重新授权」时，又是「先 await 一次 IndexedDB 拿句柄 → 再申请」，
+**中间隔了一个 await，激活又废了** → 于是变成「授权 → 再授权 → 点永久允许」的三段式。
+
+### 8l.2 改法
+
+| 位置 | 改动 |
+| --- | --- |
+| `src/background/service-worker.js` | `chrome.action.onClicked` / `chrome.commands.onCommand` **先开侧栏、再发起识别**（抓住手势）；新增 `setPanelNotice()` 把「正在识别…」/失败原因写进 `chrome.storage.session`，侧栏状态条直接显示 |
+| `src/panel/panel.js` | 新增 `kickPermission(handle)`：在点击处理里**同步**发起 `requestPermission()`，返回 Promise；`save()` 在所有 `await` 之前先 `kickPermission(rootHandle)`，跨站图片授权改成「先 await 它再申请」；`regrant()` 同样先 `kickPermission`，并把结果作为 `permissionPromise` 带进续存 |
+| `src/lib/writer.js` | `saveDraft()` 新增 `opts.permissionPromise`：优先用它；`state !== 'granted'` 就申请（不再跳过 `unknown`）；`needgesture` 直接回 `NEED_CONFIRM` |
+| `src/panel/panel.js` | `handlePendingSave()` **先查目录权限**：权限不是 granted 时不再「先闪一次正在保存再闪红」，直接摆出「授权并保存（一次完成）」按钮，用户点一下 = 授权 + 把刚才那篇一起存进去 |
+| `src/content/content.js` | 整篇识别完正文后显示提示条「已识别正文，拖动边框可微调范围（Esc 取消）」 |
+| `src/background/service-worker.js` | 页面右键菜单新增「妙言剪藏：设置…」（扩展图标右键是 Chrome 自带菜单，contextMenus 加不了项，只能从页面右键进） |
+
+### 8l.3 测试
+
+新增 R 组 5 项断言（`test/e2e.mjs`）：
+
+| 断言 | 内容 |
+| --- | --- |
+| R1 | `kickPermission` 对假句柄的映射：resolve→`granted`、reject `NotAllowedError`→`needgesture`、无方法→`null` |
+| R2 | 授权卡文案含「授权并保存」；有待存草稿时按钮变「授权并保存（一次完成）」 |
+| R3 | 后台写进 `storage.session` 的 `panelNotice` 会显示在面板状态条上 |
+| R4 | 静态断言：`chrome.action.onClicked` 里 `openPanel(` 出现在 `startClipOnTab(` **之前** |
+| R5 | 整篇识别后浮层提示条包含「已识别正文」 |
+
+**回归：113/113 全绿**（原 108 项 + R 组 5 项）。
+`node --check` 全部通过；**权限模型一个字没动**（`activeTab / scripting / tabs / storage / contextMenus / sidePanel`，无 `host_permissions`、无 `content_scripts`）。
+
+### 8l.4 还没做的部分
+
+v0.7.1 **只改了代码与测试，尚未提交商店审核**：v0.7.0 还在 PENDING_REVIEW，
+商店同一时间只收一个待审版本，所以等 v0.7.0 出结果后再发 v0.7.1。
 
 ---
 

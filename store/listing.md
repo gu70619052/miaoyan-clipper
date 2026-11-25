@@ -184,6 +184,22 @@ Chrome 商店要求：
 
 ## 7. 版本说明（每个版本都要写）
 
+### 0.7.1
+
+```
+首次体验修复：
+· 点地址栏旁的扩展图标会立刻打开侧边栏并显示「正在识别正文…」，
+  正文识别完自动填进编辑区——不再出现「点了没反应」
+· 识别完正文会给出明确提示：「已识别正文，拖动边框可微调范围（Esc 取消）」
+· 授权妙言库目录后，第一次保存就能存进去：授权请求改为在你点击「保存」的
+  那一刻发起，不必再点一次「重新授权」，也不必再点「永久允许」
+· 从页内浮层保存时若目录授权待确认，侧栏会直接给出「授权并保存（一次完成）」，
+  点一下即授权并把刚才那篇一起存进去
+· 页面右键菜单新增「妙言剪藏：设置…」，不用再从扩展图标右键绕进设置页
+· 权限没有任何变化：仍然只有 activeTab / scripting / tabs / storage / contextMenus / sidePanel，
+  安装时不申请网站访问权，也不新增任何对外请求
+```
+
 ### 0.7.0
 
 ```
@@ -263,10 +279,10 @@ src/
 
 ```bash
 cd output/miaoyan-clipper
-zip -r ../miaoyan-clipper-0.7.0-store.zip \
+zip -r ../miaoyan-clipper-0.7.1-store.zip \
   manifest.json README.md PRIVACY.md icons src \
   -x 'icons/make_icons.py'
 ```
 
-已打好的包：`output/miaoyan-clipper-0.7.0-store.zip`（37 文件，压缩后约 226 KB，`manifest.json` 在根目录；体积主要是本地打包的 Defuddle 350 KB）。
+已打好的包：`output/miaoyan-clipper-0.7.1-store.zip`（37 文件，压缩后约 229 KB，`manifest.json` 在根目录；体积主要是本地打包的 Defuddle 350 KB）。
 （`test/audit/static/miaoyan-clipper-0.3.2-store.zip` 是 0.3.2 时期的旧包，别用。）

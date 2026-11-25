@@ -238,17 +238,39 @@ export async function saveDraft(draft, opts = {}) {
     return { ok: false, code: 'NO_ROOT', error: '尚未授权妙言库目录：请在侧栏或设置页点「选择妙言库目录」' };
   }
 
-  // 抢在用户手势还有效时先申请一次授权（纯优化：拿到就省掉下面那次失败重试，
-  // 拿不到也照样尝试写——Chrome 的 queryPermission 有时滞后，真正的判据是「能不能写」）
-  if (opts.requestPermission) {
+  // 授权状态先问一遍，但**不因此就放弃写入**：Chrome 对 iCloud 这类目录
+  // 经常把权限报成 prompt，可实际写还是允许的，真正的判据是「能不能写」。
+  //
+  // permissionPromise：面板在用户点「保存」的**同一个任务**里就把授权请求发出去了
+  // （见 panel.js 的 kickPermission）。requestPermission 依赖「用户激活」，而激活
+  // 只有几秒有效期 —— 一旦中途弹了别的框（跨站图片授权）或做了慢操作，等轮到它时
+  // 激活已过期，Chrome 抛 NotAllowedError，于是「第一次保存说没权限、再点一次就好」。
+  // 所以这里优先等那个已经发出去的请求。
+  let granted = false;
+  if (opts.permissionPromise) {
+    const state = await opts.permissionPromise;
+    granted = state === 'granted';
+    if (!granted && state === 'needgesture') {
+      return {
+        ok: false,
+        code: 'NEED_CONFIRM',
+        error: '目录授权需要在点击时立刻确认，请再点一次「保存到妙言」',
+      };
+    }
+  }
+  if (!granted && opts.requestPermission) {
     const state = await queryPermissionState(root, 'readwrite');
-    if (state !== 'granted' && state !== 'unknown') {
-      await requestPermissionNow(root, 'readwrite');
+    // unknown 也要试一次申请：读不到状态不等于有权限
+    if (state !== 'granted') {
+      const asked = await requestPermissionNow(root, 'readwrite');
+      granted = asked === 'granted';
+    } else {
+      granted = true;
     }
   }
 
   let res = await writeOnce(draft, settings, root, opts);
-  if (!res.ok && res.code === 'PERMISSION_REQUIRED' && opts.requestPermission) {
+  if (!res.ok && res.code === 'PERMISSION_REQUIRED' && opts.requestPermission && !granted) {
     const state = await requestPermissionNow(root, 'readwrite');
     if (state === 'granted') {
       res = await writeOnce(draft, settings, root, opts);

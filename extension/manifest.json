@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "妙言剪藏",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "浏览网页时框选、选段、整篇或截图剪藏，转成妙言 Markdown（含数学公式），直接存进本地妙言笔记库。（第三方开发的非官方插件）",
   "minimum_chrome_version": "116",
   "icons": {

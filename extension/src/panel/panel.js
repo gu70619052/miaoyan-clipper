@@ -69,9 +69,37 @@ const el = {
 let currentDraft = null;
 let folders = [];
 let rootName = '';
+let rootHandle = null;        // 缓存目录句柄：保存时要在用户手势的同一个任务里发起授权，不能等异步取
 let pendingReauthor = null;   // 权限失效时暂存的保存请求，重新授权后自动续存
 let allNotes = [];            // 库里已有的笔记标题（插入双链用）
 const handledPending = new Set();   // 已处理过的 pendingSave 请求（按 at 去重，防重复保存）
+
+/**
+ * 在用户手势的**同一个任务**里立刻发起目录授权。
+ *
+ * requestPermission() 依赖「用户激活」，而激活只有几秒有效期：
+ * 一旦中途弹了别的框（跨站图片授权）或做了慢操作，等轮到它时激活已经过期，
+ * Chrome 会抛 NotAllowedError —— 这正是「第一次保存说没权限、再点一次就好」的由来。
+ * 所以趁手势还在，先把授权请求发出去，再去干别的。
+ *
+ * 返回的 promise 永远不会 reject：状态以字符串形式给出。
+ */
+function kickPermission(handle) {
+  if (!handle || typeof handle.requestPermission !== 'function') return null;
+  try {
+    const p = handle.requestPermission({ mode: 'readwrite' });
+    if (!p || typeof p.then !== 'function') return null;
+    return p.then(
+      (state) => state || 'unknown',
+      (err) => {
+        const name = (err && err.name) || '';
+        return name === 'NotAllowedError' || name === 'SecurityError' ? 'needgesture' : 'denied';
+      },
+    );
+  } catch (err) {
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------- 工具
 
@@ -112,8 +140,8 @@ const AUTH_COPY = {
   },
   prompt: {
     title: '目录还需要你确认一次',
-    desc: '妙言库目录的句柄还在（上方的目录名就是它），但 Chrome 把这次授权退回了「待确认」——浏览器重启、扩展重载或 iCloud 目录重新挂载后都会这样。点一下「重新授权此目录」即可，不用重新找目录。',
-    hint: '点按钮后 Chrome 会弹一次确认框，选「允许」即可继续保存。',
+    desc: '妙言库目录的句柄还在（上方的目录名就是它），但 Chrome 把这次授权退回了「待确认」——浏览器重启、扩展重载或 iCloud 目录重新挂载后都会这样。点一下「授权并保存」即可，不用重新找目录。',
+    hint: '点按钮后 Chrome 会弹一次确认框，选「允许」即可继续保存（这次会连着把刚才那篇一起存进去）。',
   },
   denied: {
     title: '目录权限被拒绝了',
@@ -130,7 +158,7 @@ const AUTH_COPY = {
 function showAuthCard(state) {
   const copy = AUTH_COPY[state] || AUTH_COPY.unknown;
   if (el.btnRegrant) {
-    el.btnRegrant.textContent = pendingReauthor ? '确认授权并保存' : '重新授权此目录（推荐）';
+    el.btnRegrant.textContent = pendingReauthor ? '授权并保存（一次完成）' : '重新授权此目录（推荐）';
   }
   el.authTitle.textContent = copy.title;
   el.authDesc.textContent = copy.desc;
@@ -149,6 +177,7 @@ async function refreshRoot() {
     handle = null;
   }
   if (!handle) {
+    rootHandle = null;
     el.rootChip.textContent = '未授权';
     el.rootChip.classList.add('warn');
     showAuthCard('none');
@@ -156,6 +185,7 @@ async function refreshRoot() {
     el.draftCard.hidden = true;
     return false;
   }
+  rootHandle = handle;
   rootName = handle.name || rootName;
   const state = await queryPermissionState(handle, 'readwrite');
   if (state === 'granted') {
@@ -187,24 +217,22 @@ async function refreshRoot() {
  * 必须在点击手势里调用：requestPermission() 依赖瞬间用户激活。
  */
 async function regrant() {
-  let handle = null;
-  try {
-    handle = await getRootHandle();
-  } catch (err) {
-    handle = null;
-  }
+  // 句柄已经在缓存里的话就用它：这样可以在用户手势的同一个任务里发起授权，
+  // 不必先 await 一次 IndexedDB（await 会把「用户激活」拖到过期）。
+  const handle = rootHandle || (await getRootHandle().catch(() => null));
   if (!handle) {
     setStatus('还没有选过目录，请点「选择妙言库目录」', 'err');
     return;
   }
   el.btnRegrant.disabled = true;
   setStatus(`正在请求「${handle.name || '妙言库'}」的访问权限…`, 'info');
-  const state = await requestPermissionNow(handle, 'readwrite');
+  const perm = kickPermission(handle);
+  const state = perm ? await perm : await requestPermissionNow(handle, 'readwrite');
   el.btnRegrant.disabled = false;
   if (state !== 'granted') {
     setStatus(
       state === 'needgesture'
-        ? '浏览器要求必须在点击时立刻授权：请再点一次「重新授权此目录」'
+        ? '浏览器要求必须在点击时立刻授权：请再点一次「授权并保存」'
         : state === 'denied'
           ? '权限被拒绝：可以点「选择妙言库目录」重新授权'
           : `权限仍未授予（${state}）`,
@@ -217,16 +245,18 @@ async function regrant() {
   await refreshRoot();
   await loadFolders();
   await loadDraft();
-  await flushPending();
+  // 把刚才那次授权的结果直接带进续存：否则续存时又会去申请一次，
+  // 而那时用户手势已经用掉了 → 又得让用户点第二下。
+  await flushPending(perm);
 }
 
 /** 权限失效期间没存成功的草稿，重新授权后接着存 */
-async function flushPending() {
+async function flushPending(permissionPromise) {
   if (!pendingReauthor) return;
   const payload = pendingReauthor;
   pendingReauthor = null;
   setSaveStatus('已重新授权，正在继续保存…', 'info');
-  const res = await writeDraft(payload);
+  const res = await writeDraft(payload, { permissionPromise: permissionPromise || null });
   if (res && res.ok) {
     const where = res.folder ? `${res.folder}/${res.fileName}` : res.fileName;
     setSaveStatus(`已保存：${where}`, 'ok');
@@ -249,6 +279,7 @@ async function pickRoot() {
   try {
     const handle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'miaoyan-library' });
     await saveRootHandle(handle);
+    rootHandle = handle;
     await refreshRoot();
     await loadFolders();
     setStatus(`已授权：${handle.name}`, 'ok');
@@ -685,14 +716,22 @@ async function save() {
   $('btn-save').disabled = true;
   setSaveStatus('正在保存…', 'info');
 
-  // 图片要存到本地，就得能访问图片所在的网站。
-  // 跨站图片（CDN 之类）需要单独授权一次 —— 在用户手势里问，不授权就退回原始链接。
+  // ① 先把「目录授权」的请求发出去：这一步必须在用户手势的同一个任务里，
+  //    后面那些 await（读设置、弹图片授权框）都可能把用户激活耗掉，
+  //    等轮到 requestPermission 时激活已过期 → 第一次保存失败、再点一次才好。
+  const permissionPromise = kickPermission(rootHandle);
+
+  // ② 图片要存到本地，就得能访问图片所在的网站。
+  //    跨站图片（CDN 之类）需要单独授权一次 —— 在用户手势里问，不授权就退回原始链接。
   let forceRemoteImages = false;
   try {
     const settings = await getSettings();
     if (settings.imagePolicy !== 'remote') {
       const need = await pendingImageOrigins(payload.draft);
       if (need.length) {
+        // 先等目录授权的框处理完再弹图片站点的框：两个弹窗别叠在一起，
+        // 否则后弹的那个会把用户激活拖过期。
+        if (permissionPromise) await permissionPromise.catch(() => {});
         const ask = await requestOriginPermissions(need);
         if (!ask.granted) forceRemoteImages = true;
       }
@@ -703,7 +742,7 @@ async function save() {
 
   let res = null;
   try {
-    res = await writeDraft(payload, { forceRemoteImages });
+    res = await writeDraft(payload, { forceRemoteImages, permissionPromise });
   } catch (err) {
     res = { ok: false, error: String(err && err.message) };
   }
@@ -758,6 +797,8 @@ async function writeDraft(payload, opts = {}) {
         root: handle,
         requestPermission: true,
         forceRemoteImages: !!opts.forceRemoteImages,
+        // 已经在用户手势里发起过的授权请求：直接用它的结果，别再申请一次
+        permissionPromise: opts.permissionPromise || null,
       });
       if (res && res.ok) return res;
       if (!allowFallback) return res || { ok: false, error: '保存失败' };
@@ -812,6 +853,35 @@ async function handlePendingSave(req) {
     title: req.title || '',
     tags: req.tags || [],
   };
+
+  // 先看目录权限：没有权限时自动代存必然失败（这里没有用户手势，
+  // Chrome 不会弹授权框）。与其让状态条先闪一次「正在保存」再闪红，
+  // 不如直接摆出「授权并保存」按钮——用户点一次就能连着存完。
+  let preState = 'unknown';
+  try {
+    const handle = await getRootHandle();
+    if (handle) preState = await queryPermissionState(handle, 'readwrite');
+  } catch (err) {
+    /* 读不到就照常试 */
+  }
+  if (preState !== 'granted' && preState !== 'unknown') {
+    pendingReauthor = payload;
+    await refreshRoot();
+    showAuthCard('prompt');
+    setSaveStatus('需要先确认一次目录授权：点上面「授权并保存」，确认后会自动接着保存', 'err');
+    await chrome.storage.session.set({
+      lastSaveResult: {
+        ok: false,
+        error: '请在侧栏点一次「授权并保存」，确认后会自动保存',
+        fileName: '',
+        folder: payload.folder,
+        path: '',
+        at: Date.now(),
+      },
+    }).catch(() => {});
+    return;
+  }
+
   setSaveStatus('正在保存（侧栏代存）…', 'info');
   const res = await writeDraft(payload, { allowFallback: false });
   if (res && !res.ok && (res.code === 'PERMISSION_REQUIRED' || res.code === 'NO_ROOT')) {
@@ -925,10 +995,27 @@ function bindEvents() {
       const req = changes.pendingSave.newValue;
       if (req && req.draft) handlePendingSave(req);
     }
+    // 后台递过来的状态（正在识别 / 失败原因）—— 剪藏失败时以前只有角标，用户看不见
+    if (changes.panelNotice) {
+      const notice = changes.panelNotice.newValue;
+      if (notice && notice.text) setStatus(notice.text, notice.kind);
+    }
   });
 }
 
 // ---------------------------------------------------------------- 启动
+
+// 测试钩子：e2e 需要断言「授权必须在用户手势里发起」这类逻辑，
+// 而面板里的按钮没法在无头浏览器里点。只在扩展页（面板页）里存在，网页上永远拿不到。
+window.__myClipPanel = {
+  kickPermission,
+  showAuthCard,
+  AUTH_COPY,
+  getPending: () => pendingReauthor,
+  setPending: (v) => {
+    pendingReauthor = v;
+  },
+};
 
 (async function init() {
   bindEvents();
@@ -942,6 +1029,15 @@ function bindEvents() {
     const res = await chrome.storage.session.get('pendingSave');
     if (res && res.pendingSave && res.pendingSave.draft) {
       handlePendingSave(res.pendingSave);
+    }
+  } catch (err) {
+    /* 忽略 */
+  }
+  // 同理：后台可能在面板打开之前就写了状态（剪藏失败原因等）
+  try {
+    const res = await chrome.storage.session.get('panelNotice');
+    if (res && res.panelNotice && res.panelNotice.text) {
+      setStatus(res.panelNotice.text, res.panelNotice.kind);
     }
   } catch (err) {
     /* 忽略 */
